@@ -6,10 +6,14 @@
 #include <memory>
 #include <optional>
 #include <ostream>
+#include <string_view>
 #include <utility>
 #include <vector>
 
+#include "linx/model/elf_loader.hpp"
+#include "linx/model/isa/disasm.hpp"
 #include "linx/model/logging.hpp"
+#include "linx/model/program_image.hpp"
 #include "linx/model/sim_assert.hpp"
 #include "linx/model/sim_object.hpp"
 #include "linx/model/validation.hpp"
@@ -115,6 +119,12 @@ public:
     return modules_;
   }
   [[nodiscard]] ValidationReport Validate() const;
+  [[nodiscard]] bool HasProgramImage() const noexcept {
+    return program_image_.has_value();
+  }
+  [[nodiscard]] const std::optional<ProgramImage> &ProgramImageView() const noexcept {
+    return program_image_;
+  }
 
   module_type &AddModule(module_type &module) {
     module.AttachRuntime(&logger_, &cycle_);
@@ -138,14 +148,40 @@ public:
     return ref;
   }
 
+  void LoadProgramImage(ProgramImage image) {
+    program_image_ = std::move(image);
+    OnProgramLoaded(*program_image_);
+  }
+
+  void LoadProgramFile(std::string_view path, std::uint64_t raw_base_address = 0) {
+    LoadProgramImage(LoadProgramImageFromFile(path, raw_base_address));
+  }
+
+  void LoadElf(std::string_view path) {
+    LoadProgramImage(LoadElfImageFromFile(path));
+  }
+
+  void LoadBinary(std::string_view path, std::uint64_t base_address = 0) {
+    LoadProgramImage(LoadRawBinaryImageFromFile(path, base_address));
+  }
+
+  virtual void PrintProgramDisassembly(std::ostream &os) const {
+    LINX_MODEL_ASSERT(program_image_.has_value());
+    isa::PrintDisassembly(os, *program_image_);
+  }
+
 protected:
   virtual void BuildSystem() {}
   virtual void ResetSystem() {}
   virtual void ReportSystem() {}
+  virtual void OnProgramLoaded(const ProgramImage &image) {
+    (void)image;
+  }
 
 private:
   std::vector<module_type *> modules_;
   std::vector<std::unique_ptr<module_type>> owned_modules_;
+  std::optional<ProgramImage> program_image_;
   SimLogger logger_;
   std::uint64_t cycle_ = 0;
   bool built_ = false;

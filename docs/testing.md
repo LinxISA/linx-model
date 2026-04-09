@@ -49,3 +49,11 @@ The checks target exercises:
 - top-level objects that are not declared as SimQueue-based
 
 These checks run through `ValidateModel()` and are wired into CI.
+
+## Loader and Disassembly Coverage
+
+The test suite also covers:
+
+- raw binary loading plus ISA disassembly
+- ELF `PT_LOAD` parsing into `ProgramImage`
+- CLI `--bin` and `--disasm-only` behavior
