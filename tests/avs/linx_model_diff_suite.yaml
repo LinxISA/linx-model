@@ -1,0 +1,38 @@
+version: linx-model-diff-v2
+description: "Deterministic QEMU-vs-reference-vs-CA differential fixtures owned by tools/model"
+
+cases:
+  - id: MODEL-SCALAR-COMMIT-SMOKE
+    category: scalar_basic
+    source: emulator/qemu/tests/linxisa/mcopy_mset_basic.s
+    source_kind: asm
+    required: true
+    ignore_fields: [cycle]
+
+  - id: MODEL-VECTOR-LANE-CONTROL
+    category: vector_lane_control
+    source: emulator/qemu/tests/linxisa/vector_header_smoke.s
+    source_kind: asm
+    required: true
+    ignore_fields: [cycle]
+
+  - id: MODEL-TILE-DESCRIPTOR-LEGALITY
+    category: tile_descriptor_legality
+    source: emulator/qemu/tests/linxisa/tile_descriptor_smoke.s
+    source_kind: asm
+    required: true
+    ignore_fields: [cycle]
+
+  - id: MODEL-TILE-CONTROL-FLOW
+    category: tile_control_flow
+    source: emulator/qemu/tests/linxisa/tile_control_flow_smoke.s
+    source_kind: asm
+    required: true
+    ignore_fields: [cycle]
+
+  - id: MODEL-PRIVILEGED-EXCEPTION-EDGE
+    category: privileged_exception_edge
+    source: emulator/qemu/tests/linxisa/privileged_ssrset_smoke.s
+    source_kind: asm
+    required: true
+    ignore_fields: [cycle]

@@ -1,3 +1,6 @@
+#include <cstdint>
+#include <filesystem>
+#include <fstream>
 #include <memory>
 #include <optional>
 #include <sstream>
@@ -7,6 +10,8 @@
 #include "linx/model.hpp"
 
 namespace {
+
+namespace fs = std::filesystem;
 
 class PipelineModule : public linx::model::Module<PipelineModule, int> {
 public:
@@ -192,6 +197,78 @@ int RunArgParseSmoke() {
   return 0;
 }
 
+std::vector<std::uint8_t> EncodeAddBytes() {
+  const auto *form = linx::model::isa::LookupFormByMnemonic("ADD");
+  if (form == nullptr) {
+    return {};
+  }
+
+  linx::model::isa::Minst inst;
+  inst.SetForm(form);
+  for (const auto &field : linx::model::isa::FieldsFor(*form)) {
+    inst.SetDecodedField(field.name, 0, field.signed_hint > 0, field.bit_width);
+  }
+  inst.RebuildTypedViews();
+
+  const auto encoded = linx::model::isa::EncodeMinst(inst);
+  if (!encoded.valid) {
+    return {};
+  }
+
+  std::vector<std::uint8_t> bytes(static_cast<std::size_t>(encoded.length_bits / 8));
+  for (std::size_t idx = 0; idx < bytes.size(); ++idx) {
+    bytes[idx] = static_cast<std::uint8_t>((encoded.bits >> (idx * 8U)) & 0xffU);
+  }
+  return bytes;
+}
+
+void WriteBinaryFile(const fs::path &path, const std::vector<std::uint8_t> &bytes) {
+  std::ofstream out(path, std::ios::binary);
+  out.write(reinterpret_cast<const char *>(bytes.data()),
+            static_cast<std::streamsize>(bytes.size()));
+}
+
+int RunDisasmCliSmoke() {
+  const auto bytes = EncodeAddBytes();
+  if (bytes.empty()) {
+    return 90;
+  }
+
+  const auto path = fs::temp_directory_path() / "linx_model_cli_disasm.bin";
+  {
+    std::error_code ec;
+    fs::remove(path, ec);
+  }
+  WriteBinaryFile(path, bytes);
+
+  ToySim sim(2);
+  std::ostringstream out;
+  std::ostringstream err;
+
+  const std::string path_text = path.string();
+  const char *argv[] = {
+      "toy-sim", "--bin", path_text.c_str(), "--raw-base", "0x3000", "--disasm-only",
+  };
+
+  const int rc = linx::model::RunSimMain(static_cast<int>(std::size(argv)),
+                                         const_cast<char **>(argv), sim, out, err);
+  std::error_code ec;
+  fs::remove(path, ec);
+
+  if (rc != 0 || !err.str().empty()) {
+    return 91;
+  }
+  if (sim.Cycle() != 0 || sim.build_system_calls != 0 || sim.reset_system_calls != 0) {
+    return 92;
+  }
+  const auto text = out.str();
+  if (text.find("source:") == std::string::npos || text.find("0x3000") == std::string::npos ||
+      text.find("add") == std::string::npos) {
+    return 93;
+  }
+  return 0;
+}
+
 int RunStepOrderSmoke() {
   std::vector<std::string> events;
   CountingModule counter(&events);
@@ -308,6 +385,9 @@ int main() {
   }
   if (RunIdleSkipSmoke() != 0) {
     return 4;
+  }
+  if (RunDisasmCliSmoke() != 0) {
+    return 5;
   }
   return 0;
 }

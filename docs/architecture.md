@@ -35,6 +35,36 @@ Within each `Module`, `WorkSelf()` is event-driven:
 `latency == N` means a write becomes readable after exactly `N` calls to
 `Work()`. `latency == 0` is still synchronized to the next `Work()` boundary.
 
+## Minst Uop Flow
+
+`isa::Minst` is the canonical packet type for Linx ISA simulation in this
+repository.
+
+- fetch allocates `MinstPtr`
+- decode fills generated v0.4 form metadata and canonical decoded fields
+- middle pipeline stages inspect or extend typed views on the same packet
+- retire, flush, or DFX consumes and destroys the packet, or converts it to
+  shared ownership only at terminal boundaries
+
+The decode field map is the encode source of truth. Typed operand, immediate,
+memory, and control views are derived caches for simulator logic and logging.
+
+## Program Loading and Disassembly
+
+`SimSystem` can now own a loaded `ProgramImage`.
+
+- ELF inputs are parsed from `PT_LOAD` segments
+- raw binaries are loaded as a single executable `.text` region
+- the ISA disassembler walks executable regions, decodes `Minst`, and prints
+  deterministic assembly from the same generated codec used by simulation
+
+The default CLI helpers accept:
+
+- `--bin <path>` to load an ELF or raw binary
+- `--raw-base <addr>` to set the base PC for raw binaries
+- `--disasm` to print assembly before simulation
+- `--disasm-only` to print assembly and exit
+
 ## Module Contract
 
 Every queue-wired module derives from `Module<Derived, PortT>`.

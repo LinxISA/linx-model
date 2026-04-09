@@ -5,6 +5,7 @@ This directory is the hub for `linx-model` documentation.
 ## Contents
 
 - [Architecture](./architecture.md)
+- [ISA Codec](./isa.md)
 - [Testing](./testing.md)
 - [Logging](./logging.md)
 

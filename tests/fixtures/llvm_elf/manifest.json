@@ -1,0 +1,60 @@
+{
+  "version": "linx-model-llvm-elf-fixtures-v1",
+  "cases": [
+    {
+      "id": "MODEL-SCALAR-MCOPY-MSET",
+      "source": "emulator/qemu/tests/linxisa/mcopy_mset_basic.s",
+      "elf": "tests/fixtures/llvm_elf/model_scalar_mcopy_mset.elf",
+      "trace_version": "1.0",
+      "max_cycles": 512,
+      "min_records": 8,
+      "require_block_kind_any_of": ["scalar"],
+      "expect_disasm_any_of": ["MSET", "MCOPY"],
+      "expect_mnemonics_any_of": ["MSET", "MCOPY"]
+    },
+    {
+      "id": "MODEL-VECTOR-LANE-CONTROL",
+      "source": "emulator/qemu/tests/linxisa/vector_header_smoke.s",
+      "elf": "tests/fixtures/llvm_elf/model_vector_lane_control.elf",
+      "trace_version": "1.0",
+      "max_cycles": 512,
+      "min_records": 2,
+      "require_block_kind_any_of": ["vpar", "vseq"],
+      "expect_disasm_any_of": ["C.BSTART.VPAR", "C.BSTART.VSEQ"],
+      "expect_mnemonics_any_of": ["C.BSTART.VPAR", "C.BSTART.VSEQ"]
+    },
+    {
+      "id": "MODEL-TILE-DESCRIPTOR-LEGALITY",
+      "source": "emulator/qemu/tests/linxisa/tile_descriptor_smoke.s",
+      "elf": "tests/fixtures/llvm_elf/model_tile_descriptor_legality.elf",
+      "trace_version": "1.0",
+      "max_cycles": 512,
+      "min_records": 2,
+      "require_block_kind_any_of": ["tma", "cube", "tepl"],
+      "expect_disasm_any_of": ["BSTART.TLOAD", "BSTART.TMA", "BSTART.CUBE", "BSTART.TEPL"],
+      "expect_mnemonics_any_of": ["BSTART.TLOAD", "BSTART.TMA", "BSTART.CUBE", "BSTART.TEPL"]
+    },
+    {
+      "id": "MODEL-TILE-CONTROL-FLOW",
+      "source": "emulator/qemu/tests/linxisa/tile_control_flow_smoke.s",
+      "elf": "tests/fixtures/llvm_elf/model_tile_control_flow.elf",
+      "trace_version": "1.0",
+      "max_cycles": 512,
+      "min_records": 2,
+      "require_block_kind_any_of": ["tma", "cube", "tepl"],
+      "expect_disasm_any_of": ["C.BSTART", "SETC."],
+      "expect_mnemonics_any_of": ["C.BSTART", "SETC.NE", "SETC.LTU"]
+    },
+    {
+      "id": "MODEL-PRIVILEGED-EXCEPTION-EDGE",
+      "source": "emulator/qemu/tests/linxisa/privileged_ssrset_smoke.s",
+      "elf": "tests/fixtures/llvm_elf/model_privileged_exception_edge.elf",
+      "trace_version": "1.0",
+      "max_cycles": 512,
+      "min_records": 1,
+      "require_block_kind_any_of": ["sys"],
+      "expect_disasm_any_of": ["SSRSET", "HL.SSRSET"],
+      "expect_mnemonics_any_of": ["SSRSET", "HL.SSRSET"]
+    }
+  ]
+}

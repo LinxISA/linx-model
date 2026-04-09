@@ -1,10 +1,12 @@
 #pragma once
 
+#include <cstddef>
 #include <cstdint>
 #include <functional>
 #include <iostream>
 #include <memory>
 #include <optional>
+#include <string>
 #include <string_view>
 #include <utility>
 
@@ -18,12 +20,19 @@ namespace linx::model {
  * @brief Parsed command-line options for simulator binaries.
  */
 struct SimMainArgs {
+  std::string engine = "ref";
+  std::optional<std::string> emit_trace_path;
   std::optional<std::uint64_t> stop_pc;
   std::optional<std::uint64_t> max_cycles;
+  std::size_t compare_window = 128;
+  std::optional<std::string> program_path;
+  std::uint64_t raw_base_address = 0;
   LogLevel log_level = LogLevel::Info;
   bool enable_reference = true;
   bool enable_pipeview = true;
   bool enable_report = true;
+  bool enable_disassembly = false;
+  bool disassembly_only = false;
 };
 
 namespace detail {
@@ -42,6 +51,30 @@ template <class SimT>
 int RunSimMain(SimT &sim, const SimMainArgs &args, std::ostream &out = std::cout) {
   if constexpr (requires { sim.Logger(); }) {
     sim.Logger().SetMinLevel(args.log_level);
+  }
+
+  if (args.program_path.has_value()) {
+    if constexpr (requires(SimT &value, const std::string &path, std::uint64_t base) {
+                    value.LoadProgramFile(path, base);
+                  }) {
+      sim.LoadProgramFile(*args.program_path, args.raw_base_address);
+    } else {
+      LINX_MODEL_ASSERT_MSG(false, "SimT does not support program loading");
+    }
+  }
+
+  if (args.enable_disassembly) {
+    if constexpr (requires(const SimT &value, std::ostream &os) {
+                    value.PrintProgramDisassembly(os);
+                  }) {
+      sim.PrintProgramDisassembly(out);
+    } else {
+      LINX_MODEL_ASSERT_MSG(false, "SimT does not support program disassembly");
+    }
+  }
+
+  if (args.disassembly_only) {
+    return 0;
   }
 
   sim.Build();
