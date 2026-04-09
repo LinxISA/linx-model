@@ -33,8 +33,12 @@ public:
   void RunReference(std::optional<std::uint64_t> stop_pc) override;
   bool NeedTerminate() const override;
   void ReportSystem() override;
-  [[nodiscard]] ExecutionContext &Context() noexcept { return *ctx_; }
-  [[nodiscard]] const ExecutionContext &Context() const noexcept { return *ctx_; }
+  [[nodiscard]] ExecutionContext &Context() noexcept {
+    return *ctx_;
+  }
+  [[nodiscard]] const ExecutionContext &Context() const noexcept {
+    return *ctx_;
+  }
 
 private:
   ExecutionContext::Ptr ctx_{std::make_shared<ExecutionContext>()};

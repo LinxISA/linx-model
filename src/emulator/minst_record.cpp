@@ -13,8 +13,7 @@ namespace linx::model::emulator {
 
 namespace {
 
-template <std::size_t N>
-void CopyText(char (&dst)[N], std::string_view src) {
+template <std::size_t N> void CopyText(char (&dst)[N], std::string_view src) {
   std::memset(dst, 0, sizeof(dst));
   const auto count = std::min<std::size_t>(src.size(), N - 1U);
   std::memcpy(dst, src.data(), count);
@@ -47,7 +46,8 @@ void FillOperand(LinxMinstOperandRecordC &dst, const isa::MinstOperand *src) {
 
 [[nodiscard]] std::size_t BytesForLen(std::uint32_t len_bits) {
   LINX_MODEL_ASSERT_MSG(len_bits % 8U == 0U, "minst trace len must be byte-aligned");
-  LINX_MODEL_ASSERT_MSG(len_bits >= 16U && len_bits <= 64U, "minst trace len must stay within v0.4 fetch sizes");
+  LINX_MODEL_ASSERT_MSG(len_bits >= 16U && len_bits <= 64U,
+                        "minst trace len must stay within v0.4 fetch sizes");
   return static_cast<std::size_t>(len_bits / 8U);
 }
 
@@ -63,8 +63,8 @@ void FillOperand(LinxMinstOperandRecordC &dst, const isa::MinstOperand *src) {
 [[nodiscard]] isa::MinstDisassemblyLine DecodeRecordLine(const MinstRecord &record) {
   const auto bytes = UnpackBytes(record);
   const auto size_bytes = BytesForLen(record.len);
-  const auto line =
-      isa::DecodeDisassemblyLine(std::span<const std::uint8_t>(bytes.data(), size_bytes), record.pc, "trace");
+  const auto line = isa::DecodeDisassemblyLine(
+      std::span<const std::uint8_t>(bytes.data(), size_bytes), record.pc, "trace");
   LINX_MODEL_ASSERT_MSG(line.has_value(), "trace decode should always yield a printable line");
   return *line;
 }
@@ -109,28 +109,34 @@ MinstRecordDecoration DecorateMinstRecord(const MinstRecord &record) {
 void WriteMinstRecordJson(std::ostream &os, const MinstRecord &record) {
   const auto decoration = DecorateMinstRecord(record);
   os << "{\"schema_version\":\"1.0\""
-     << ",\"cycle\":" << record.cycle << ",\"pc\":" << record.pc << ",\"next_pc\":" << record.next_pc
-     << ",\"insn\":" << record.insn << ",\"len\":" << record.len << ",\"lane_id\":" << record.lane_id
-     << ",\"pc_hex\":\"" << JsonEscape(decoration.pc_hex) << "\",\"next_pc_hex\":\""
-     << JsonEscape(decoration.next_pc_hex) << "\",\"insn_hex\":\"" << JsonEscape(decoration.insn_hex)
-     << "\",\"bytes_hex\":\"" << JsonEscape(decoration.bytes_hex) << "\",\"asm\":\""
-     << JsonEscape(decoration.asm_text) << "\",\"dump\":\"" << JsonEscape(decoration.dump_line) << "\""
+     << ",\"cycle\":" << record.cycle << ",\"pc\":" << record.pc
+     << ",\"next_pc\":" << record.next_pc << ",\"insn\":" << record.insn
+     << ",\"len\":" << record.len << ",\"lane_id\":" << record.lane_id << ",\"pc_hex\":\""
+     << JsonEscape(decoration.pc_hex) << "\",\"next_pc_hex\":\""
+     << JsonEscape(decoration.next_pc_hex) << "\",\"insn_hex\":\""
+     << JsonEscape(decoration.insn_hex) << "\",\"bytes_hex\":\"" << JsonEscape(decoration.bytes_hex)
+     << "\",\"asm\":\"" << JsonEscape(decoration.asm_text) << "\",\"dump\":\""
+     << JsonEscape(decoration.dump_line) << "\""
      << ",\"mnemonic\":\"" << JsonEscape(record.mnemonic) << "\",\"form_id\":\""
      << JsonEscape(record.form_id) << "\",\"opcode_class\":\"" << JsonEscape(record.opcode_class)
      << "\",\"lifecycle\":\"" << JsonEscape(record.lifecycle) << "\",\"block_kind\":\""
-     << JsonEscape(record.block_kind) << "\",\"src0_valid\":" << static_cast<unsigned>(record.src0.valid)
-     << ",\"src0_kind\":" << static_cast<unsigned>(record.src0.kind) << ",\"src0_value\":" << record.src0.value
-     << ",\"src0_data\":" << record.src0.data << ",\"src1_valid\":" << static_cast<unsigned>(record.src1.valid)
-     << ",\"src1_kind\":" << static_cast<unsigned>(record.src1.kind) << ",\"src1_value\":" << record.src1.value
-     << ",\"src1_data\":" << record.src1.data << ",\"dst0_valid\":" << static_cast<unsigned>(record.dst0.valid)
-     << ",\"dst0_kind\":" << static_cast<unsigned>(record.dst0.kind) << ",\"dst0_value\":" << record.dst0.value
-     << ",\"dst0_data\":" << record.dst0.data << ",\"mem_valid\":" << static_cast<unsigned>(record.memory.valid)
+     << JsonEscape(record.block_kind)
+     << "\",\"src0_valid\":" << static_cast<unsigned>(record.src0.valid)
+     << ",\"src0_kind\":" << static_cast<unsigned>(record.src0.kind)
+     << ",\"src0_value\":" << record.src0.value << ",\"src0_data\":" << record.src0.data
+     << ",\"src1_valid\":" << static_cast<unsigned>(record.src1.valid)
+     << ",\"src1_kind\":" << static_cast<unsigned>(record.src1.kind)
+     << ",\"src1_value\":" << record.src1.value << ",\"src1_data\":" << record.src1.data
+     << ",\"dst0_valid\":" << static_cast<unsigned>(record.dst0.valid)
+     << ",\"dst0_kind\":" << static_cast<unsigned>(record.dst0.kind)
+     << ",\"dst0_value\":" << record.dst0.value << ",\"dst0_data\":" << record.dst0.data
+     << ",\"mem_valid\":" << static_cast<unsigned>(record.memory.valid)
      << ",\"mem_is_load\":" << static_cast<unsigned>(record.memory.is_load)
      << ",\"mem_is_store\":" << static_cast<unsigned>(record.memory.is_store)
      << ",\"mem_addr\":" << record.memory.addr << ",\"mem_size\":" << record.memory.size
      << ",\"mem_wdata\":" << record.memory.wdata << ",\"mem_rdata\":" << record.memory.rdata
-     << ",\"trap_valid\":" << static_cast<unsigned>(record.trap.valid) << ",\"trap_cause\":"
-     << record.trap.cause << ",\"traparg0\":" << record.trap.traparg0 << "}";
+     << ",\"trap_valid\":" << static_cast<unsigned>(record.trap.valid)
+     << ",\"trap_cause\":" << record.trap.cause << ",\"traparg0\":" << record.trap.traparg0 << "}";
 }
 
 void WriteMinstRecordDump(std::ostream &os, const MinstRecord &record) {
@@ -153,8 +159,9 @@ bool EqualMinstRecord(const MinstRecord &lhs, const MinstRecord &rhs, std::strin
   return false;
 }
 
-MinstRecord MakeMinstRecord(const isa::Minst &inst, std::uint64_t cycle, std::string_view block_kind,
-                            int lane_id, std::optional<std::uint16_t> trap_cause,
+MinstRecord MakeMinstRecord(const isa::Minst &inst, std::uint64_t cycle,
+                            std::string_view block_kind, int lane_id,
+                            std::optional<std::uint16_t> trap_cause,
                             std::optional<std::uint64_t> traparg0) {
   MinstRecord record{};
   record.cycle = cycle;

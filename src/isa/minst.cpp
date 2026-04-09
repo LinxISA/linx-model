@@ -87,8 +87,8 @@ void ReplaceAsmToken(std::string &text, std::string_view needle, std::string_vie
 }
 
 [[nodiscard]] bool IsSourceField(std::string_view name) noexcept {
-  return StartsWith(name, "Src") || StartsWith(name, "RegSrc") || name == "rs1" ||
-         name == "rs2" || name == "rs3";
+  return StartsWith(name, "Src") || StartsWith(name, "RegSrc") || name == "rs1" || name == "rs2" ||
+         name == "rs3";
 }
 
 [[nodiscard]] bool IsImmediateField(std::string_view name) noexcept {
@@ -114,10 +114,9 @@ void ReplaceAsmToken(std::string &text, std::string_view needle, std::string_vie
 
 [[nodiscard]] std::string_view RegisterAsmName(std::uint64_t reg) noexcept {
   static constexpr std::array<std::string_view, 32> kNames = {
-      "zero", "sp", "a0", "a1", "a2", "a3", "a4", "a5",
-      "a6",   "a7", "ra", "s0", "s1", "s2", "s3", "s4",
-      "s5",   "s6", "s7", "s8", "x0", "x1", "x2", "x3",
-      "t#1",  "t#2","t#3","t#4","u#1","u#2","u#3","u#4",
+      "zero", "sp", "a0",  "a1",  "a2",  "a3",  "a4",  "a5",  "a6",  "a7",  "ra",
+      "s0",   "s1", "s2",  "s3",  "s4",  "s5",  "s6",  "s7",  "s8",  "x0",  "x1",
+      "x2",   "x3", "t#1", "t#2", "t#3", "t#4", "u#1", "u#2", "u#3", "u#4",
   };
   return reg < kNames.size() ? kNames[reg] : "invalid-reg";
 }
@@ -213,17 +212,14 @@ void AddFieldAliases(std::vector<AsmReplacement> &replacements, const MinstDecod
 BuildAsmReplacements(std::span<const MinstDecodedField> fields) {
   std::vector<AsmReplacement> replacements;
   replacements.reserve(fields.size() * 4U);
-  const auto immediate_field_count =
-      static_cast<std::size_t>(std::count_if(fields.begin(), fields.end(),
-                                             [](const MinstDecodedField &field) {
-                                               return IsImmediateField(field.name);
-                                             }));
+  const auto immediate_field_count = static_cast<std::size_t>(
+      std::count_if(fields.begin(), fields.end(),
+                    [](const MinstDecodedField &field) { return IsImmediateField(field.name); }));
   for (const auto &field : fields) {
     AddFieldAliases(replacements, field, FormatAsmFieldValue(field), immediate_field_count);
   }
-  std::sort(replacements.begin(), replacements.end(), [](const auto &lhs, const auto &rhs) {
-    return lhs.needle.size() > rhs.needle.size();
-  });
+  std::sort(replacements.begin(), replacements.end(),
+            [](const auto &lhs, const auto &rhs) { return lhs.needle.size() > rhs.needle.size(); });
   replacements.erase(std::unique(replacements.begin(), replacements.end(),
                                  [](const auto &lhs, const auto &rhs) {
                                    return lhs.needle == rhs.needle &&

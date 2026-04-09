@@ -28,22 +28,46 @@ public:
   void Reset();
   void LoadProgram(const ProgramImage &image);
 
-  [[nodiscard]] bool HasProgram() const noexcept { return has_program_; }
-  [[nodiscard]] const ProgramImage &Program() const noexcept { return program_; }
-  [[nodiscard]] LinxState &State() noexcept { return *state_; }
-  [[nodiscard]] const LinxState &State() const noexcept { return *state_; }
-  [[nodiscard]] const StatePtr &SharedState() const noexcept { return state_; }
-  [[nodiscard]] std::uint64_t Cycle() const noexcept { return cycle_; }
-  [[nodiscard]] bool Terminated() const noexcept { return terminated_; }
-  [[nodiscard]] int ExitCode() const noexcept { return exit_code_; }
-  [[nodiscard]] const std::string &LastError() const noexcept { return last_error_; }
-  [[nodiscard]] const std::vector<MinstRecord> &Committed() const noexcept { return committed_; }
-  [[nodiscard]] const std::optional<MinstRecord> &LastCommitted() const noexcept { return last_committed_; }
+  [[nodiscard]] bool HasProgram() const noexcept {
+    return has_program_;
+  }
+  [[nodiscard]] const ProgramImage &Program() const noexcept {
+    return program_;
+  }
+  [[nodiscard]] LinxState &State() noexcept {
+    return *state_;
+  }
+  [[nodiscard]] const LinxState &State() const noexcept {
+    return *state_;
+  }
+  [[nodiscard]] const StatePtr &SharedState() const noexcept {
+    return state_;
+  }
+  [[nodiscard]] std::uint64_t Cycle() const noexcept {
+    return cycle_;
+  }
+  [[nodiscard]] bool Terminated() const noexcept {
+    return terminated_;
+  }
+  [[nodiscard]] int ExitCode() const noexcept {
+    return exit_code_;
+  }
+  [[nodiscard]] const std::string &LastError() const noexcept {
+    return last_error_;
+  }
+  [[nodiscard]] const std::vector<MinstRecord> &Committed() const noexcept {
+    return committed_;
+  }
+  [[nodiscard]] const std::optional<MinstRecord> &LastCommitted() const noexcept {
+    return last_committed_;
+  }
 
   void SetTracePath(std::string path);
   void AppendRecord(const MinstRecord &record);
   void RequestTerminate(int exit_code, std::string reason = {});
-  void AdvanceCycle() noexcept { ++cycle_; }
+  void AdvanceCycle() noexcept {
+    ++cycle_;
+  }
 
   [[nodiscard]] std::optional<std::uint8_t> Read8(std::uint64_t addr) const;
   [[nodiscard]] std::optional<std::uint16_t> Read16(std::uint64_t addr) const;

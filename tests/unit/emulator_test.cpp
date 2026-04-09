@@ -10,11 +10,11 @@ namespace {
 
 using linx::model::LoadRawBinaryImageFromBytes;
 using linx::model::emulator::CompareHarness;
+using linx::model::emulator::DumpMinstRecord;
 using linx::model::emulator::ExecutionContext;
 using linx::model::emulator::MakeMinstRecord;
 using linx::model::emulator::ReferenceExecutor;
 using linx::model::emulator::WriteMinstRecordDump;
-using linx::model::emulator::DumpMinstRecord;
 using linx::model::isa::DecodeMinstPacked;
 using linx::model::isa::Minst;
 using linx::model::isa::MinstCodecStatus;

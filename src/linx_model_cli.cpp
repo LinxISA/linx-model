@@ -38,7 +38,8 @@ int RunReferenceEngine(const SimMainArgs &args, std::ostream &out, std::ostream 
   return ctx->ExitCode();
 }
 
-void WriteMismatchDump(const SimMainArgs &args, const linx::model::emulator::CompareMismatch &mismatch) {
+void WriteMismatchDump(const SimMainArgs &args,
+                       const linx::model::emulator::CompareMismatch &mismatch) {
   const std::filesystem::path base =
       args.emit_trace_path.has_value() ? std::filesystem::path(*args.emit_trace_path).parent_path()
                                        : std::filesystem::temp_directory_path();
@@ -113,8 +114,8 @@ int RunCompareEngine(const SimMainArgs &args, std::ostream &, std::ostream &err)
     if (!ref_ctx->LastCommitted().has_value() || !ca_sim->Context().LastCommitted().has_value()) {
       break;
     }
-    if (!harness.Push(*ref_ctx->LastCommitted(), *ca_sim->Context().LastCommitted(), ref_ctx->State(),
-                      ca_sim->Context().State())) {
+    if (!harness.Push(*ref_ctx->LastCommitted(), *ca_sim->Context().LastCommitted(),
+                      ref_ctx->State(), ca_sim->Context().State())) {
       WriteMismatchDump(args, *harness.Mismatch());
       err << harness.Mismatch()->reason << '\n';
       return 2;

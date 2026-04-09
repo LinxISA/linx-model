@@ -47,7 +47,8 @@ void ExecutionContext::SetTracePath(std::string path) {
   }
   trace_stream_.emplace(path, std::ios::out | std::ios::trunc);
   LINX_MODEL_ASSERT_MSG(trace_stream_->good(), "failed to open minst trace jsonl output");
-  const auto dump_path = fs_path.has_extension() ? fs_path.replace_extension(".dump") : fs_path += ".dump";
+  const auto dump_path =
+      fs_path.has_extension() ? fs_path.replace_extension(".dump") : fs_path += ".dump";
   trace_dump_stream_.emplace(dump_path, std::ios::out | std::ios::trunc);
   LINX_MODEL_ASSERT_MSG(trace_dump_stream_->good(), "failed to open minst trace dump output");
 }

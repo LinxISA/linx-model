@@ -99,7 +99,8 @@ std::optional<isa::Minst> ReferenceExecutor::FetchDecode() const {
   }
 
   isa::Minst inst = *isa::Minst::CreateFetch(state.insn_count + 1U, state.pc, packed, len);
-  if (isa::DecodeMinstPacked(packed, static_cast<int>(len * 8U), inst) != isa::MinstCodecStatus::Ok) {
+  if (isa::DecodeMinstPacked(packed, static_cast<int>(len * 8U), inst) !=
+      isa::MinstCodecStatus::Ok) {
     return std::nullopt;
   }
   inst.MarkStage(isa::MinstStage::Decode);
@@ -280,7 +281,8 @@ void ReferenceExecutor::Execute(isa::Minst &inst) {
     state.pc = inst.next_pc;
   } else if (inst.mnemonic == "MSET") {
     const auto dst_addr = ReadGpr(state, inst.srcs.empty() ? 0 : inst.srcs[0].value);
-    const auto value = static_cast<std::uint8_t>(ReadGpr(state, inst.srcs.size() > 1U ? inst.srcs[1].value : 0));
+    const auto value =
+        static_cast<std::uint8_t>(ReadGpr(state, inst.srcs.size() > 1U ? inst.srcs[1].value : 0));
     const auto count = ReadGpr(state, inst.srcs.size() > 2U ? inst.srcs[2].value : 0);
     for (std::uint64_t idx = 0; idx < count; ++idx) {
       ctx.Write8(dst_addr + idx, value);
