@@ -5,11 +5,14 @@
 #include <cstring>
 #include <iomanip>
 #include <sstream>
+#include <type_traits>
 
 #include "linx/model/isa/disasm.hpp"
 #include "linx/model/sim_assert.hpp"
 
 namespace linx::model::emulator {
+
+std::string JsonEscape(std::string_view text);
 
 namespace {
 
@@ -69,6 +72,21 @@ void FillOperand(LinxMinstOperandRecordC &dst, const isa::MinstOperand *src) {
   return *line;
 }
 
+void WriteJsonKey(std::ostream &os, std::string_view key) {
+  os << ",\"" << key << "\":";
+}
+
+template <typename T> void WriteJsonUintField(std::ostream &os, std::string_view key, T value) {
+  static_assert(std::is_integral_v<T>);
+  WriteJsonKey(os, key);
+  os << value;
+}
+
+void WriteJsonStringField(std::ostream &os, std::string_view key, std::string_view value) {
+  WriteJsonKey(os, key);
+  os << "\"" << JsonEscape(value) << "\"";
+}
+
 } // namespace
 
 std::string JsonEscape(std::string_view text) {
@@ -108,35 +126,47 @@ MinstRecordDecoration DecorateMinstRecord(const MinstRecord &record) {
 
 void WriteMinstRecordJson(std::ostream &os, const MinstRecord &record) {
   const auto decoration = DecorateMinstRecord(record);
-  os << "{\"schema_version\":\"1.0\""
-     << ",\"cycle\":" << record.cycle << ",\"pc\":" << record.pc
-     << ",\"next_pc\":" << record.next_pc << ",\"insn\":" << record.insn
-     << ",\"len\":" << record.len << ",\"lane_id\":" << record.lane_id << ",\"pc_hex\":\""
-     << JsonEscape(decoration.pc_hex) << "\",\"next_pc_hex\":\""
-     << JsonEscape(decoration.next_pc_hex) << "\",\"insn_hex\":\""
-     << JsonEscape(decoration.insn_hex) << "\",\"bytes_hex\":\"" << JsonEscape(decoration.bytes_hex)
-     << "\",\"asm\":\"" << JsonEscape(decoration.asm_text) << "\",\"dump\":\""
-     << JsonEscape(decoration.dump_line) << "\""
-     << ",\"mnemonic\":\"" << JsonEscape(record.mnemonic) << "\",\"form_id\":\""
-     << JsonEscape(record.form_id) << "\",\"opcode_class\":\"" << JsonEscape(record.opcode_class)
-     << "\",\"lifecycle\":\"" << JsonEscape(record.lifecycle) << "\",\"block_kind\":\""
-     << JsonEscape(record.block_kind)
-     << "\",\"src0_valid\":" << static_cast<unsigned>(record.src0.valid)
-     << ",\"src0_kind\":" << static_cast<unsigned>(record.src0.kind)
-     << ",\"src0_value\":" << record.src0.value << ",\"src0_data\":" << record.src0.data
-     << ",\"src1_valid\":" << static_cast<unsigned>(record.src1.valid)
-     << ",\"src1_kind\":" << static_cast<unsigned>(record.src1.kind)
-     << ",\"src1_value\":" << record.src1.value << ",\"src1_data\":" << record.src1.data
-     << ",\"dst0_valid\":" << static_cast<unsigned>(record.dst0.valid)
-     << ",\"dst0_kind\":" << static_cast<unsigned>(record.dst0.kind)
-     << ",\"dst0_value\":" << record.dst0.value << ",\"dst0_data\":" << record.dst0.data
-     << ",\"mem_valid\":" << static_cast<unsigned>(record.memory.valid)
-     << ",\"mem_is_load\":" << static_cast<unsigned>(record.memory.is_load)
-     << ",\"mem_is_store\":" << static_cast<unsigned>(record.memory.is_store)
-     << ",\"mem_addr\":" << record.memory.addr << ",\"mem_size\":" << record.memory.size
-     << ",\"mem_wdata\":" << record.memory.wdata << ",\"mem_rdata\":" << record.memory.rdata
-     << ",\"trap_valid\":" << static_cast<unsigned>(record.trap.valid)
-     << ",\"trap_cause\":" << record.trap.cause << ",\"traparg0\":" << record.trap.traparg0 << "}";
+  os << "{\"schema_version\":\"1.0\"";
+  WriteJsonUintField(os, "cycle", record.cycle);
+  WriteJsonUintField(os, "pc", record.pc);
+  WriteJsonUintField(os, "next_pc", record.next_pc);
+  WriteJsonUintField(os, "insn", record.insn);
+  WriteJsonUintField(os, "len", record.len);
+  WriteJsonUintField(os, "lane_id", record.lane_id);
+  WriteJsonStringField(os, "pc_hex", decoration.pc_hex);
+  WriteJsonStringField(os, "next_pc_hex", decoration.next_pc_hex);
+  WriteJsonStringField(os, "insn_hex", decoration.insn_hex);
+  WriteJsonStringField(os, "bytes_hex", decoration.bytes_hex);
+  WriteJsonStringField(os, "asm", decoration.asm_text);
+  WriteJsonStringField(os, "dump", decoration.dump_line);
+  WriteJsonStringField(os, "mnemonic", record.mnemonic);
+  WriteJsonStringField(os, "form_id", record.form_id);
+  WriteJsonStringField(os, "opcode_class", record.opcode_class);
+  WriteJsonStringField(os, "lifecycle", record.lifecycle);
+  WriteJsonStringField(os, "block_kind", record.block_kind);
+  WriteJsonUintField(os, "src0_valid", static_cast<unsigned>(record.src0.valid));
+  WriteJsonUintField(os, "src0_kind", static_cast<unsigned>(record.src0.kind));
+  WriteJsonUintField(os, "src0_value", record.src0.value);
+  WriteJsonUintField(os, "src0_data", record.src0.data);
+  WriteJsonUintField(os, "src1_valid", static_cast<unsigned>(record.src1.valid));
+  WriteJsonUintField(os, "src1_kind", static_cast<unsigned>(record.src1.kind));
+  WriteJsonUintField(os, "src1_value", record.src1.value);
+  WriteJsonUintField(os, "src1_data", record.src1.data);
+  WriteJsonUintField(os, "dst0_valid", static_cast<unsigned>(record.dst0.valid));
+  WriteJsonUintField(os, "dst0_kind", static_cast<unsigned>(record.dst0.kind));
+  WriteJsonUintField(os, "dst0_value", record.dst0.value);
+  WriteJsonUintField(os, "dst0_data", record.dst0.data);
+  WriteJsonUintField(os, "mem_valid", static_cast<unsigned>(record.memory.valid));
+  WriteJsonUintField(os, "mem_is_load", static_cast<unsigned>(record.memory.is_load));
+  WriteJsonUintField(os, "mem_is_store", static_cast<unsigned>(record.memory.is_store));
+  WriteJsonUintField(os, "mem_addr", record.memory.addr);
+  WriteJsonUintField(os, "mem_size", record.memory.size);
+  WriteJsonUintField(os, "mem_wdata", record.memory.wdata);
+  WriteJsonUintField(os, "mem_rdata", record.memory.rdata);
+  WriteJsonUintField(os, "trap_valid", static_cast<unsigned>(record.trap.valid));
+  WriteJsonUintField(os, "trap_cause", record.trap.cause);
+  WriteJsonUintField(os, "traparg0", record.trap.traparg0);
+  os << "}";
 }
 
 void WriteMinstRecordDump(std::ostream &os, const MinstRecord &record) {
