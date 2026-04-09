@@ -1,0 +1,15 @@
+/**
+ * @mainpage linx-model
+ *
+ * @section intro Introduction
+ *
+ * `linx-model` is a queue-based, cycle-accurate simulation support library for
+ * Linx ISA modeling. The API centers on `SimQueue`, `Module`, and `SimSystem`.
+ *
+ * @section docs Further Reading
+ *
+ * - docs/index.md
+ * - docs/architecture.md
+ * - docs/testing.md
+ * - docs/logging.md
+ */
