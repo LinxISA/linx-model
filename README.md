@@ -11,7 +11,7 @@ state.
 - `SimQueue<T>` models latency-aware, cycle-visible FIFO movement for value
   payloads, `std::unique_ptr<T>`, and `std::shared_ptr<T>`.
 - `isa::Minst` is the single in-flight uop payload. Fetch allocates
-  `MinstPtr`, decode populates generated LinxISA v0.4 fields, and retire/flush
+  `MinstPtr`, decode populates generated LinxISA v0.56 fields, and retire/flush
   or DFX consumes the same object.
 - `ProgramImage` plus the ELF/raw loader and ISA disassembler let the model CLI
   load a binary, decode instructions, and print assembly directly from the
@@ -71,7 +71,7 @@ ctest --test-dir build-sanitize --output-on-failure
   semantics
 - [`docs/testing.md`](./docs/testing.md) UT / ST / checks / sanitizers
 - [`docs/logging.md`](./docs/logging.md) structured log format and packet dump
-- [`docs/isa.md`](./docs/isa.md) generated LinxISA v0.4 codec and `Minst`
+- [`docs/isa.md`](./docs/isa.md) generated LinxISA v0.56 codec and `Minst`
   packet contract
 
 Doxygen can be generated locally with:

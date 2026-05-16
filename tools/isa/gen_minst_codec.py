@@ -298,7 +298,7 @@ def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument(
         "--spec",
-        default="/Users/zhoubot/linx-isa/isa/v0.4/linxisa-v0.4.json",
+        default="/Users/zhoubot/linx-isa/isa/v0.56/linxisa-v0.56.json",
     )
     parser.add_argument(
         "--header",
