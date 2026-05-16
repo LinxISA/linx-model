@@ -50,7 +50,7 @@ void FillOperand(LinxMinstOperandRecordC &dst, const isa::MinstOperand *src) {
 [[nodiscard]] std::size_t BytesForLen(std::uint32_t len_bits) {
   LINX_MODEL_ASSERT_MSG(len_bits % 8U == 0U, "minst trace len must be byte-aligned");
   LINX_MODEL_ASSERT_MSG(len_bits >= 16U && len_bits <= 64U,
-                        "minst trace len must stay within v0.4 fetch sizes");
+                        "minst trace len must stay within v0.56 fetch sizes");
   return static_cast<std::size_t>(len_bits / 8U);
 }
 
