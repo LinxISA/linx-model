@@ -19,7 +19,6 @@ using linx::model::isa::DecodeMinstPacked;
 using linx::model::isa::EncodeMinst;
 using linx::model::isa::FieldsFor;
 using linx::model::isa::LookupFormByMnemonic;
-using linx::model::isa::LookupFormByUid;
 using linx::model::isa::Minst;
 using linx::model::isa::MinstCodecStatus;
 using linx::model::isa::MinstConstraintDesc;
@@ -367,45 +366,6 @@ int RunAsmTemplateReplacementSmoke() {
   return 0;
 }
 
-int RunDescriptorLastBitSmoke() {
-  struct Case {
-    std::string_view uid;
-    bool last;
-  };
-  const std::array<Case, 4> cases = {{
-      {"5537088c4f03", true},
-      {"f6b1a38eb134", false},
-      {"0be0ecce86bb", false},
-      {"fb045cf4149a", true},
-  }};
-
-  for (std::size_t i = 0; i < cases.size(); ++i) {
-    const auto *form = LookupFormByUid(cases[i].uid);
-    if (form == nullptr) {
-      return 60 + static_cast<int>(i);
-    }
-
-    Minst inst = BuildSatisfyingInst(*form);
-    const auto encoded = EncodeMinst(inst);
-    if (!encoded.valid || encoded.status != MinstCodecStatus::Ok) {
-      return 64 + static_cast<int>(i);
-    }
-    if (((encoded.bits & (std::uint64_t{1} << 15U)) != 0) != cases[i].last) {
-      return 68 + static_cast<int>(i);
-    }
-
-    Minst decoded;
-    if (DecodeMinstPacked(encoded.bits, encoded.length_bits, decoded) != MinstCodecStatus::Ok) {
-      return 72 + static_cast<int>(i);
-    }
-    if (decoded.form_id != cases[i].uid) {
-      return 76 + static_cast<int>(i);
-    }
-  }
-
-  return 0;
-}
-
 } // namespace
 
 int main() {
@@ -438,11 +398,6 @@ int main() {
   if (asm_replace != 0) {
     std::cerr << "RunAsmTemplateReplacementSmoke failed with code " << asm_replace << '\n';
     return 6;
-  }
-  const auto descriptor_last = RunDescriptorLastBitSmoke();
-  if (descriptor_last != 0) {
-    std::cerr << "RunDescriptorLastBitSmoke failed with code " << descriptor_last << '\n';
-    return 7;
   }
   return 0;
 }

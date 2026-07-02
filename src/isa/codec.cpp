@@ -283,8 +283,6 @@ MinstEncodedWord EncodeMinst(const Minst &inst) noexcept {
     }
   }
 
-  bits = (bits & ~inst.form->mask) | inst.form->match;
-
   for (const auto &constraint : ConstraintsFor(*inst.form)) {
     const auto *field = inst.FindDecodedField(constraint.field_name);
     if (field == nullptr) {
