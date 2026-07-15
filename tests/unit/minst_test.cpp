@@ -223,7 +223,7 @@ int RunConstraintViolationSmoke() {
 
 int RunCoverageRoundTripSmoke() {
   const auto forms = AllMinstForms();
-  if (forms.size() != 740) {
+  if (forms.size() != 747) {
     return 20;
   }
 

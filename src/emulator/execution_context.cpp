@@ -6,6 +6,39 @@
 
 namespace linx::model::emulator {
 
+namespace {
+
+constexpr std::uint64_t kTestFinisherAddress = 0x10009000ULL;
+constexpr std::uint32_t kFinisherStatusMask = 0xffffU;
+constexpr std::uint32_t kFinisherCodeShift = 16U;
+constexpr std::uint32_t kFinisherFail = 0x3333U;
+constexpr std::uint32_t kFinisherPass = 0x5555U;
+constexpr std::uint32_t kFinisherReset = 0x7777U;
+
+void HandleTestFinisherWrite(ExecutionContext &ctx, std::uint64_t addr, std::uint32_t value) {
+  if (addr != kTestFinisherAddress) {
+    return;
+  }
+
+  const auto status = value & kFinisherStatusMask;
+  const auto code = static_cast<int>(value >> kFinisherCodeShift);
+  switch (status) {
+  case kFinisherPass:
+    ctx.RequestTerminate(0, "finisher_pass");
+    break;
+  case kFinisherFail:
+    ctx.RequestTerminate(code == 0 ? 1 : code, "finisher_fail");
+    break;
+  case kFinisherReset:
+    ctx.RequestTerminate(code == 0 ? 1 : code, "finisher_reset");
+    break;
+  default:
+    break;
+  }
+}
+
+} // namespace
+
 void ExecutionContext::Reset() {
   state_->Reset();
   memory_.clear();
@@ -123,17 +156,12 @@ void ExecutionContext::Write32(std::uint64_t addr, std::uint32_t value) {
   for (std::size_t idx = 0; idx < 4; ++idx) {
     Write8(addr + idx, static_cast<std::uint8_t>((value >> (idx * 8U)) & 0xffU));
   }
-  if (addr == 0x10000004ULL) {
-    RequestTerminate(static_cast<int>(value), value == 0 ? "guest_exit" : "guest_fail");
-  }
+  HandleTestFinisherWrite(*this, addr, value);
 }
 
 void ExecutionContext::Write64(std::uint64_t addr, std::uint64_t value) {
   for (std::size_t idx = 0; idx < 8; ++idx) {
     Write8(addr + idx, static_cast<std::uint8_t>((value >> (idx * 8U)) & 0xffU));
-  }
-  if (addr == 0x10000004ULL) {
-    RequestTerminate(static_cast<int>(value), value == 0 ? "guest_exit" : "guest_fail");
   }
 }
 

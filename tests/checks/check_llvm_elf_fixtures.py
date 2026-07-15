@@ -63,19 +63,20 @@ def main(argv: list[str]) -> int:
         with tempfile.TemporaryDirectory(prefix=f"linx-model-fixture-{case_id.lower()}-") as td:
             tmpdir = Path(td)
             trace = tmpdir / f"{case_id}.jsonl"
-            result = _run(
-                [
-                    str(cli),
-                    "--engine",
-                    "ref",
-                    "--bin",
-                    str(elf),
-                    "--emit-minst-trace",
-                    str(trace),
-                    "--max-cycles",
-                    str(case.get("max_cycles", 512)),
-                ]
-            )
+            run_cmd = [
+                str(cli),
+                "--engine",
+                "ref",
+                "--bin",
+                str(elf),
+                "--emit-minst-trace",
+                str(trace),
+                "--max-cycles",
+                str(case.get("max_cycles", 512)),
+            ]
+            if "stop_pc" in case:
+                run_cmd.extend(["--stop-pc", str(case["stop_pc"])])
+            result = _run(run_cmd)
             if result.returncode != 0:
                 raise _fail(case_id, "ref", result.stdout)
 

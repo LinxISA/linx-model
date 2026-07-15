@@ -47,8 +47,8 @@ int TestMinstRecordAdapter() {
 int TestReferenceExecutorExit() {
   const std::vector<std::uint8_t> program = {
       0x00, 0x08,                         // C.BSTART.STD
-      0x15, 0x01, 0x00, 0x00,             // addi zero, 0, ->a0
-      0x0e, 0x10, 0x97, 0x4f, 0x00, 0x00, // hl.lui 0x10000004, ->t
+      0x0e, 0x00, 0x17, 0x51, 0x55, 0x05, // hl.lui 0x5555, ->a0
+      0x0e, 0x10, 0x97, 0x0f, 0x00, 0x09, // hl.lui 0x10009000, ->t
       0x59, 0x20, 0x81, 0x01,             // swi a0, [t#1, 0]
       0x00, 0x00,                         // C.BSTOP
   };
@@ -58,7 +58,7 @@ int TestReferenceExecutorExit() {
   ReferenceExecutor executor(ctx);
   executor.Run(std::nullopt, 16);
 
-  if (!ctx->Terminated() || ctx->ExitCode() != 0) {
+  if (!ctx->Terminated() || ctx->ExitCode() != 0 || ctx->LastError() != "finisher_pass") {
     return 4;
   }
   if (ctx->Committed().size() < 4U) {
@@ -67,10 +67,46 @@ int TestReferenceExecutorExit() {
   return 0;
 }
 
+int TestFinisherContract() {
+  constexpr std::uint64_t kFinisher = 0x10009000ULL;
+  constexpr std::uint64_t kLegacyExit = 0x10000004ULL;
+
+  ExecutionContext ctx;
+  ctx.Write32(kFinisher, 0x5555U);
+  if (!ctx.Terminated() || ctx.ExitCode() != 0 || ctx.LastError() != "finisher_pass") {
+    return 6;
+  }
+
+  ctx.Reset();
+  ctx.Write32(kFinisher, (7U << 16U) | 0x3333U);
+  if (!ctx.Terminated() || ctx.ExitCode() != 7 || ctx.LastError() != "finisher_fail") {
+    return 7;
+  }
+
+  ctx.Reset();
+  ctx.Write32(kFinisher, 0x7777U);
+  if (!ctx.Terminated() || ctx.ExitCode() == 0 || ctx.LastError() != "finisher_reset") {
+    return 8;
+  }
+
+  ctx.Reset();
+  ctx.Write32(kFinisher, 0x1234U);
+  if (ctx.Terminated()) {
+    return 9;
+  }
+
+  ctx.Write32(kLegacyExit, 0U);
+  ctx.Write64(kLegacyExit, 1U);
+  if (ctx.Terminated()) {
+    return 10;
+  }
+  return 0;
+}
+
 int TestCompareHarness() {
   Minst inst;
   if (DecodeMinstPacked(0x00000115ULL, 32, inst) != MinstCodecStatus::Ok) {
-    return 6;
+    return 11;
   }
   inst.MarkRetired();
   const auto a = MakeMinstRecord(inst, 0, "scalar", -1);
@@ -78,14 +114,14 @@ int TestCompareHarness() {
   CompareHarness harness(4);
   static const auto kZeroState = std::make_shared<const linx::model::emulator::LinxState>();
   if (!harness.Push(a, b, *kZeroState, *kZeroState)) {
-    return 7;
+    return 12;
   }
   b.next_pc += 4;
   if (harness.Push(a, b, *kZeroState, *kZeroState)) {
-    return 8;
+    return 13;
   }
   if (!harness.Mismatch().has_value()) {
-    return 9;
+    return 14;
   }
   return 0;
 }
@@ -93,7 +129,7 @@ int TestCompareHarness() {
 int TestMinstRecordDumpFormatting() {
   Minst inst;
   if (DecodeMinstPacked(0x00000115ULL, 32, inst) != MinstCodecStatus::Ok) {
-    return 10;
+    return 15;
   }
   inst.pc = 0x24;
   inst.next_pc = 0x28;
@@ -104,7 +140,7 @@ int TestMinstRecordDumpFormatting() {
   if (json.find("\"pc_hex\":\"0x0000000000000024\"") == std::string::npos ||
       json.find("\"asm\":\"addi zero, 0, ->{t, u, a0}") == std::string::npos ||
       json.find("\"dump\":\"0000000000000024:") == std::string::npos) {
-    return 11;
+    return 16;
   }
 
   std::ostringstream dump;
@@ -112,7 +148,7 @@ int TestMinstRecordDumpFormatting() {
   const auto text = dump.str();
   if (text.find("0000000000000024:") == std::string::npos ||
       text.find("addi zero, 0, ->{t, u, a0}") == std::string::npos) {
-    return 12;
+    return 17;
   }
   return 0;
 }
@@ -127,6 +163,9 @@ int main() {
     return rc;
   }
   if (const int rc = TestReferenceExecutorExit(); rc != 0) {
+    return rc;
+  }
+  if (const int rc = TestFinisherContract(); rc != 0) {
     return rc;
   }
   if (const int rc = TestCompareHarness(); rc != 0) {
