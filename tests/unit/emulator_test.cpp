@@ -1,3 +1,4 @@
+#include <array>
 #include <cstdint>
 #include <memory>
 #include <sstream>
@@ -63,6 +64,53 @@ int TestReferenceExecutorExit() {
   }
   if (ctx->Committed().size() < 4U) {
     return 5;
+  }
+  return 0;
+}
+
+int TestReferenceExecutorImmediateContracts() {
+  const std::vector<std::uint8_t> program = {
+      0xfe, 0xff, 0x17, 0xf1, 0xff, 0xff, // hl.lui 0xffffffff, ->a0
+      0x1e, 0x11, 0x97, 0x1f, 0x11, 0x11, // hl.lui 0x11111111, ->t
+      0x2e, 0x22, 0x17, 0x2f, 0x22, 0x22, // hl.lui 0x22222222, ->u
+      0x19, 0xa2, 0x11, 0x00,             // lwi [a1, 4], ->a2
+      0xd9, 0xaf, 0x32, 0xfe,             // swi a3, [a1, -4]
+  };
+
+  auto ctx = std::make_shared<ExecutionContext>();
+  ctx->LoadProgram(LoadRawBinaryImageFromBytes(program, "immediate-contracts", 0x1000));
+  ctx->State().tq = {0x10, 0x11, 0x12, 0x13};
+  ctx->State().uq = {0x20, 0x21, 0x22, 0x23};
+  ctx->State().gpr[3] = UINT64_MAX - 3; // a1; +4 wraps to zero
+  ctx->State().gpr[5] = 0x11223344;     // a3
+  ctx->Write32(0, 0x89abcdef);
+
+  ReferenceExecutor executor(ctx);
+  if (!executor.Step() || ctx->State().gpr[2] != UINT64_MAX || !ctx->LastCommitted().has_value() ||
+      ctx->LastCommitted()->dst0.data != UINT64_MAX) {
+    return 18;
+  }
+  if (!executor.Step() ||
+      ctx->State().tq != std::array<std::uint64_t, 4>{0x11111111, 0x10, 0x11, 0x12} ||
+      ctx->State().uq != std::array<std::uint64_t, 4>{0x20, 0x21, 0x22, 0x23} ||
+      !ctx->LastCommitted().has_value() || ctx->LastCommitted()->dst0.data != 0x11111111) {
+    return 19;
+  }
+  if (!executor.Step() ||
+      ctx->State().uq != std::array<std::uint64_t, 4>{0x22222222, 0x20, 0x21, 0x22} ||
+      ctx->State().tq != std::array<std::uint64_t, 4>{0x11111111, 0x10, 0x11, 0x12} ||
+      !ctx->LastCommitted().has_value() || ctx->LastCommitted()->dst0.data != 0x22222222) {
+    return 20;
+  }
+  if (!executor.Step() || ctx->State().gpr[4] != 0xffffffff89abcdefULL ||
+      !ctx->LastCommitted().has_value() || ctx->LastCommitted()->memory.addr != 0 ||
+      ctx->LastCommitted()->memory.rdata != 0xffffffff89abcdefULL) {
+    return 21;
+  }
+  ctx->State().gpr[3] = 2; // a1; -4 wraps to UINT64_MAX - 1
+  if (!executor.Step() || ctx->Read32(UINT64_MAX - 1).value_or(0) != 0x11223344U ||
+      !ctx->LastCommitted().has_value() || ctx->LastCommitted()->memory.addr != UINT64_MAX - 1) {
+    return 22;
   }
   return 0;
 }
@@ -163,6 +211,9 @@ int main() {
     return rc;
   }
   if (const int rc = TestReferenceExecutorExit(); rc != 0) {
+    return rc;
+  }
+  if (const int rc = TestReferenceExecutorImmediateContracts(); rc != 0) {
     return rc;
   }
   if (const int rc = TestFinisherContract(); rc != 0) {

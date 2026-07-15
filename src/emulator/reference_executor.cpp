@@ -56,6 +56,23 @@ void WriteGpr(LinxState &state, std::uint64_t idx, std::uint64_t value) {
   state.gpr[idx] = value;
 }
 
+void PushQueue(std::array<std::uint64_t, kLinxQueueCount> &queue, std::uint64_t value) {
+  for (std::size_t idx = queue.size() - 1; idx > 0; --idx) {
+    queue[idx] = queue[idx - 1];
+  }
+  queue[0] = value;
+}
+
+void WriteHlLuiDest(LinxState &state, std::uint64_t idx, std::uint64_t value) {
+  if (idx == 31) {
+    PushQueue(state.tq, value);
+  } else if (idx == 30) {
+    PushQueue(state.uq, value);
+  } else {
+    WriteGpr(state, idx, value);
+  }
+}
+
 std::string ResolveBlockKind(const isa::Minst &inst, const LinxState &state) {
   if (inst.mnemonic == "C.BSTART.VPAR") {
     return "vpar";
@@ -212,13 +229,10 @@ void ReferenceExecutor::Execute(isa::Minst &inst) {
   } else if (inst.mnemonic == "HL.LUI") {
     const auto rd = inst.dsts.empty() ? 0 : inst.dsts.front().value;
     const auto imm = GetUnsignedAny(inst, {"imm", "simm22", "simm"}).value_or(0);
-    if (rd >= kLinxGprCount) {
-      state.tq[0] = imm;
-      commit_record.dst0.data = state.tq[0];
-    } else {
-      WriteGpr(state, rd, imm);
-      commit_record.dst0.data = ReadGpr(state, rd);
-    }
+    const auto value = static_cast<std::uint64_t>(
+        static_cast<std::int64_t>(static_cast<std::int32_t>(static_cast<std::uint32_t>(imm))));
+    WriteHlLuiDest(state, rd, value);
+    commit_record.dst0.data = value;
     state.pc = inst.next_pc;
   } else if (inst.mnemonic == "ADDI") {
     const auto rd = inst.dsts.empty() ? 0 : inst.dsts.front().value;
@@ -230,11 +244,14 @@ void ReferenceExecutor::Execute(isa::Minst &inst) {
   } else if (inst.mnemonic == "LWI") {
     const auto rd = inst.dsts.empty() ? 0 : inst.dsts.front().value;
     const auto base = ReadGpr(state, inst.srcs.empty() ? 0 : inst.srcs.front().value);
-    const auto off = GetSignedAny(inst, {"simm", "simm12"}).value_or(0);
-    const auto addr = static_cast<std::uint64_t>(static_cast<std::int64_t>(base) + off);
-    const auto value = ctx.Read32(addr).value_or(0);
+    const auto off =
+        static_cast<std::uint64_t>(GetSignedAny(inst, {"simm", "simm12"}).value_or(0)) * 4U;
+    const auto addr = base + off;
+    const auto raw_value = ctx.Read32(addr).value_or(0);
+    const auto value =
+        static_cast<std::uint64_t>(static_cast<std::int64_t>(static_cast<std::int32_t>(raw_value)));
     WriteGpr(state, rd, value);
-    commit_record.dst0.data = ReadGpr(state, rd);
+    commit_record.dst0.data = value;
     commit_record.memory.valid = 1;
     commit_record.memory.is_load = 1;
     commit_record.memory.addr = addr;
@@ -244,8 +261,9 @@ void ReferenceExecutor::Execute(isa::Minst &inst) {
   } else if (inst.mnemonic == "SWI") {
     const auto value = ReadGpr(state, inst.srcs.empty() ? 0 : inst.srcs.front().value);
     const auto base = ReadGpr(state, inst.srcs.size() > 1U ? inst.srcs[1].value : 0);
-    const auto off = GetSignedAny(inst, {"simm", "simm12"}).value_or(0);
-    const auto addr = static_cast<std::uint64_t>(static_cast<std::int64_t>(base) + off);
+    const auto off =
+        static_cast<std::uint64_t>(GetSignedAny(inst, {"simm", "simm12"}).value_or(0)) * 4U;
+    const auto addr = base + off;
     ctx.Write32(addr, static_cast<std::uint32_t>(value));
     commit_record.memory.valid = 1;
     commit_record.memory.is_store = 1;
