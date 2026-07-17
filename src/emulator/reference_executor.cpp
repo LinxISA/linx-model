@@ -80,8 +80,23 @@ std::string ResolveBlockKind(const isa::Minst &inst, const LinxState &state) {
   if (inst.mnemonic == "C.BSTART.VSEQ") {
     return "vseq";
   }
-  if (inst.mnemonic == "BSTART.TLOAD" || inst.mnemonic == "BSTART.TMA" ||
-      inst.mnemonic == "BSTART.TEPL" || inst.mnemonic == "BSTART.CUBE") {
+  if (inst.mnemonic == "BSTART.TEPL") {
+    return "tepl";
+  }
+  if (inst.mnemonic == "BSTART.CUBE" || inst.mnemonic == "BSTART.TMATMUL" ||
+      inst.mnemonic == "BSTART.TMATMUL.ACC" || inst.mnemonic == "BSTART.TMATMUL.BIAS" ||
+      inst.mnemonic == "BSTART.TMATMULMX" || inst.mnemonic == "BSTART.TMATMULMX.ACC" ||
+      inst.mnemonic == "BSTART.TMATMULMX.BIAS" || inst.mnemonic == "BSTART.TGEMV" ||
+      inst.mnemonic == "BSTART.TGEMV.ACC" || inst.mnemonic == "BSTART.TGEMV.BIAS" ||
+      inst.mnemonic == "BSTART.TGEMVMX" || inst.mnemonic == "BSTART.TGEMVMX.ACC" ||
+      inst.mnemonic == "BSTART.TGEMVMX.BIAS") {
+    return "cube";
+  }
+  if (inst.mnemonic == "BSTART.TLOAD" || inst.mnemonic == "BSTART.TSTORE" ||
+      inst.mnemonic == "BSTART.TMOV" || inst.mnemonic == "BSTART.TPREFETCH" ||
+      inst.mnemonic == "BSTART.TMA" || inst.mnemonic == "BSTART.MGATHER" ||
+      inst.mnemonic == "BSTART.MSCATTER" || inst.mnemonic == "BSTART.MGATHER.MASK" ||
+      inst.mnemonic == "BSTART.MSCATTER.MASK" || inst.mnemonic == "BSTART.MGATHER.CAS") {
     return "tma";
   }
   if (inst.mnemonic == "SSRSET" || inst.mnemonic == "HL.SSRSET") {
@@ -92,6 +107,16 @@ std::string ResolveBlockKind(const isa::Minst &inst, const LinxState &state) {
 
 int ResolveLaneId(std::string_view block_kind) {
   return (block_kind == "vpar" || block_kind == "vseq") ? 0 : -1;
+}
+
+bool IsTileHeader(const isa::Minst &inst) {
+  const auto block_kind = ResolveBlockKind(inst, LinxState{});
+  return block_kind == "tma" || block_kind == "cube" || block_kind == "tepl";
+}
+
+bool IsUnsupportedV057Scalar(const isa::Minst &inst) {
+  return inst.mnemonic == "CASB" || inst.mnemonic == "CASH" || inst.mnemonic == "CASW" ||
+         inst.mnemonic == "CASD" || inst.mnemonic == "DMA";
 }
 
 } // namespace
@@ -306,10 +331,18 @@ void ReferenceExecutor::Execute(isa::Minst &inst) {
       ctx.Write8(dst_addr + idx, value);
     }
     state.pc = inst.next_pc;
-  } else if (inst.mnemonic == "BSTART.TLOAD" || inst.mnemonic == "B.TEXT") {
-    state.block_kind = "tma";
+  } else if (IsTileHeader(inst) || inst.mnemonic == "B.TEXT") {
+    const auto header_block_kind =
+        inst.mnemonic == "B.TEXT" ? std::string("tma") : current_block_kind;
+    state.block_kind = header_block_kind;
     state.pc = inst.next_pc;
-    std::strncpy(commit_record.block_kind, "tma", sizeof(commit_record.block_kind) - 1U);
+    commit_record.block_kind[0] = 0;
+    std::strncpy(commit_record.block_kind, header_block_kind.c_str(),
+                 sizeof(commit_record.block_kind) - 1U);
+  } else if (IsUnsupportedV057Scalar(inst)) {
+    inst.annotation = "v0.57 scalar AMO decoded; reference executor semantics are not implemented";
+    state.pc = inst.next_pc;
+    ctx.RequestTerminate(1, std::string("unsupported_instruction:") + std::string(inst.mnemonic));
   } else {
     state.pc = inst.next_pc;
   }

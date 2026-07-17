@@ -15,4 +15,4 @@ extern const std::size_t kConstraintCount;
 extern const MinstFormDesc kForms[];
 extern const std::size_t kFormCount;
 
-} // namespace linx::model::isa::generated
+}  // namespace linx::model::isa::generated

@@ -41,11 +41,11 @@ add_library(linx::model ALIAS linx_model)
 add_custom_target(
   gen-isa-codec
   COMMAND "${CMAKE_CURRENT_SOURCE_DIR}/tools/isa/gen_minst_codec.py"
-          --spec "${CMAKE_CURRENT_SOURCE_DIR}/../../isa/v0.56/linxisa-v0.56.json"
+          --spec "${CMAKE_CURRENT_SOURCE_DIR}/../../isa/v0.57/linxisa-v0.57.json"
           --header "${CMAKE_CURRENT_SOURCE_DIR}/include/linx/model/isa/generated_tables.hpp"
           --source "${CMAKE_CURRENT_SOURCE_DIR}/src/isa/generated_tables.cpp"
   WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
-  COMMENT "Regenerating committed LinxISA v0.56 Minst codec tables")
+  COMMENT "Regenerating committed LinxISA v0.57 Minst codec tables")
 
 target_include_directories(
   linx_model

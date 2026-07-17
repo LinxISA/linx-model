@@ -2,10 +2,10 @@
 
 ## Scope
 
-`linx-model` ships a committed generated LinxISA v0.56 codec for `isa::Minst`.
+`linx-model` ships a committed generated LinxISA v0.57 codec for `isa::Minst`.
 The source of truth is:
 
-- `/Users/zhoubot/linx-isa/isa/v0.56/linxisa-v0.56.json`
+- `/Users/zhoubot/linx-isa/isa/v0.57/linxisa-v0.57.json`
 
 The generated C++ tables are committed under:
 

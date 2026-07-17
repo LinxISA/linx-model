@@ -17,8 +17,39 @@ using linx::model::emulator::MakeMinstRecord;
 using linx::model::emulator::ReferenceExecutor;
 using linx::model::emulator::WriteMinstRecordDump;
 using linx::model::isa::DecodeMinstPacked;
+using linx::model::isa::EncodeMinst;
+using linx::model::isa::FieldsFor;
+using linx::model::isa::LookupFormByUid;
 using linx::model::isa::Minst;
 using linx::model::isa::MinstCodecStatus;
+
+Minst BuildZeroInst(std::string_view uid) {
+  Minst inst;
+  const auto *form = LookupFormByUid(uid);
+  if (form == nullptr) {
+    return inst;
+  }
+  inst.SetForm(form);
+  for (const auto &field : FieldsFor(*form)) {
+    inst.SetDecodedField(field.name, 0, field.signed_hint > 0, field.bit_width);
+  }
+  inst.RebuildTypedViews();
+  return inst;
+}
+
+std::vector<std::uint8_t> EncodedBytes(const Minst &inst) {
+  const auto encoded = EncodeMinst(inst);
+  std::vector<std::uint8_t> bytes;
+  if (!encoded.valid) {
+    return bytes;
+  }
+  const auto byte_count = encoded.length_bits / 8U;
+  bytes.reserve(byte_count);
+  for (std::uint8_t idx = 0; idx < byte_count; ++idx) {
+    bytes.push_back(static_cast<std::uint8_t>((encoded.bits >> (idx * 8U)) & 0xffU));
+  }
+  return bytes;
+}
 
 int TestStateReset() {
   auto state = std::make_shared<linx::model::emulator::LinxState>();
@@ -28,6 +59,58 @@ int TestStateReset() {
   if (state->gpr[2] != 0 || state->block_kind != "scalar" || state->lane_id != -1) {
     return 1;
   }
+  return 0;
+}
+
+int TestV057TileHeadersAndUnsupportedScalar() {
+  {
+    const auto bytes = EncodedBytes(BuildZeroInst("d5f83e5aadf6")); // BSTART.TPREFETCH
+    if (bytes.empty()) {
+      return 23;
+    }
+    auto ctx = std::make_shared<ExecutionContext>();
+    ctx->LoadProgram(LoadRawBinaryImageFromBytes(bytes, "tprefetch-header", 0));
+    ReferenceExecutor executor(ctx);
+    if (!executor.Step() || ctx->Terminated() || ctx->State().block_kind != "tma" ||
+        !ctx->LastCommitted().has_value() ||
+        std::string_view(ctx->LastCommitted()->mnemonic) != "BSTART.TPREFETCH" ||
+        std::string_view(ctx->LastCommitted()->block_kind) != "tma") {
+      return 24;
+    }
+  }
+
+  {
+    const auto bytes = EncodedBytes(BuildZeroInst("ae19f5b678f5")); // BSTART.TGEMV
+    if (bytes.empty()) {
+      return 25;
+    }
+    auto ctx = std::make_shared<ExecutionContext>();
+    ctx->LoadProgram(LoadRawBinaryImageFromBytes(bytes, "tgemv-header", 0));
+    ReferenceExecutor executor(ctx);
+    if (!executor.Step() || ctx->Terminated() || ctx->State().block_kind != "cube" ||
+        !ctx->LastCommitted().has_value() ||
+        std::string_view(ctx->LastCommitted()->mnemonic) != "BSTART.TGEMV" ||
+        std::string_view(ctx->LastCommitted()->block_kind) != "cube") {
+      return 26;
+    }
+  }
+
+  {
+    const auto bytes = EncodedBytes(BuildZeroInst("7e529b871832")); // CASB
+    if (bytes.empty()) {
+      return 27;
+    }
+    auto ctx = std::make_shared<ExecutionContext>();
+    ctx->LoadProgram(LoadRawBinaryImageFromBytes(bytes, "casb-unsupported", 0));
+    ReferenceExecutor executor(ctx);
+    if (executor.Step() || !ctx->Terminated() || ctx->ExitCode() != 1 ||
+        ctx->LastError() != "unsupported_instruction:CASB" || !ctx->LastCommitted().has_value() ||
+        std::string_view(ctx->LastCommitted()->mnemonic) != "CASB" ||
+        std::string_view(ctx->LastCommitted()->opcode_class) != "atomic") {
+      return 28;
+    }
+  }
+
   return 0;
 }
 
@@ -223,6 +306,9 @@ int main() {
     return rc;
   }
   if (const int rc = TestMinstRecordDumpFormatting(); rc != 0) {
+    return rc;
+  }
+  if (const int rc = TestV057TileHeadersAndUnsupportedScalar(); rc != 0) {
     return rc;
   }
   return 0;
