@@ -41,7 +41,7 @@ Within each `Module`, `WorkSelf()` is event-driven:
 repository.
 
 - fetch allocates `MinstPtr`
-- decode fills generated v0.56 form metadata and canonical decoded fields
+- decode fills generated v0.57 form metadata and canonical decoded fields
 - middle pipeline stages inspect or extend typed views on the same packet
 - retire, flush, or DFX consumes and destroys the packet, or converts it to
   shared ownership only at terminal boundaries

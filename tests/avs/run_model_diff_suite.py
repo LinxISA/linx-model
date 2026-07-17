@@ -146,6 +146,8 @@ def main(argv: list[str]) -> int:
     ap.add_argument("--root", default="")
     ap.add_argument("--suite", default="avs/model/linx_model_diff_suite.yaml")
     ap.add_argument("--workdir", default="")
+    ap.add_argument("--qemu", default="")
+    ap.add_argument("--qemu-bios", default="")
     args = ap.parse_args(argv)
 
     root = Path(args.root).resolve() if args.root else Path(__file__).resolve().parents[4]
@@ -157,7 +159,11 @@ def main(argv: list[str]) -> int:
     clangxx = _default_bin(root, "compiler/llvm/build-linxisa-clang/bin/clang++")
     llc = _default_bin(root, "compiler/llvm/build-linxisa-clang/bin/llc")
     lld = _default_bin(root, "compiler/llvm/build-linxisa-clang/bin/ld.lld")
-    qemu = _default_bin(root, "emulator/qemu/build/qemu-system-linx64")
+    qemu = (
+        Path(args.qemu).resolve()
+        if args.qemu
+        else _default_bin(root, "emulator/qemu/build/qemu-system-linx64")
+    )
     cli = _default_bin(root, "tools/model/build/linx_model_cli")
     validator = _default_bin(root, "tools/model/tests/avs/validate_minst_schema.py")
 
@@ -203,7 +209,11 @@ def main(argv: list[str]) -> int:
 
         env = dict(os.environ)
         env["LINX_MINST_TRACE"] = str(qemu_trace)
-        result = _run([str(qemu), "-nographic", "-monitor", "none", "-machine", "virt", "-kernel", str(obj)], env=env)
+        qemu_cmd = [str(qemu), "-nographic", "-monitor", "none", "-machine", "virt"]
+        if args.qemu_bios:
+            qemu_cmd.extend(["-bios", args.qemu_bios])
+        qemu_cmd.extend(["-kernel", str(obj)])
+        result = _run(qemu_cmd, env=env)
         if result.returncode != 0:
             summary["cases"].append({"id": case_id, "status": "fail", "stage": "qemu", "log": result.stdout})
             ok = False

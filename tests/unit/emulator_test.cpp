@@ -1,3 +1,4 @@
+#include <array>
 #include <cstdint>
 #include <memory>
 #include <sstream>
@@ -16,8 +17,39 @@ using linx::model::emulator::MakeMinstRecord;
 using linx::model::emulator::ReferenceExecutor;
 using linx::model::emulator::WriteMinstRecordDump;
 using linx::model::isa::DecodeMinstPacked;
+using linx::model::isa::EncodeMinst;
+using linx::model::isa::FieldsFor;
+using linx::model::isa::LookupFormByUid;
 using linx::model::isa::Minst;
 using linx::model::isa::MinstCodecStatus;
+
+Minst BuildZeroInst(std::string_view uid) {
+  Minst inst;
+  const auto *form = LookupFormByUid(uid);
+  if (form == nullptr) {
+    return inst;
+  }
+  inst.SetForm(form);
+  for (const auto &field : FieldsFor(*form)) {
+    inst.SetDecodedField(field.name, 0, field.signed_hint > 0, field.bit_width);
+  }
+  inst.RebuildTypedViews();
+  return inst;
+}
+
+std::vector<std::uint8_t> EncodedBytes(const Minst &inst) {
+  const auto encoded = EncodeMinst(inst);
+  std::vector<std::uint8_t> bytes;
+  if (!encoded.valid) {
+    return bytes;
+  }
+  const auto byte_count = encoded.length_bits / 8U;
+  bytes.reserve(byte_count);
+  for (std::uint8_t idx = 0; idx < byte_count; ++idx) {
+    bytes.push_back(static_cast<std::uint8_t>((encoded.bits >> (idx * 8U)) & 0xffU));
+  }
+  return bytes;
+}
 
 int TestStateReset() {
   auto state = std::make_shared<linx::model::emulator::LinxState>();
@@ -27,6 +59,58 @@ int TestStateReset() {
   if (state->gpr[2] != 0 || state->block_kind != "scalar" || state->lane_id != -1) {
     return 1;
   }
+  return 0;
+}
+
+int TestV057TileHeadersAndUnsupportedScalar() {
+  {
+    const auto bytes = EncodedBytes(BuildZeroInst("d5f83e5aadf6")); // BSTART.TPREFETCH
+    if (bytes.empty()) {
+      return 23;
+    }
+    auto ctx = std::make_shared<ExecutionContext>();
+    ctx->LoadProgram(LoadRawBinaryImageFromBytes(bytes, "tprefetch-header", 0));
+    ReferenceExecutor executor(ctx);
+    if (!executor.Step() || ctx->Terminated() || ctx->State().block_kind != "tma" ||
+        !ctx->LastCommitted().has_value() ||
+        std::string_view(ctx->LastCommitted()->mnemonic) != "BSTART.TPREFETCH" ||
+        std::string_view(ctx->LastCommitted()->block_kind) != "tma") {
+      return 24;
+    }
+  }
+
+  {
+    const auto bytes = EncodedBytes(BuildZeroInst("ae19f5b678f5")); // BSTART.TGEMV
+    if (bytes.empty()) {
+      return 25;
+    }
+    auto ctx = std::make_shared<ExecutionContext>();
+    ctx->LoadProgram(LoadRawBinaryImageFromBytes(bytes, "tgemv-header", 0));
+    ReferenceExecutor executor(ctx);
+    if (!executor.Step() || ctx->Terminated() || ctx->State().block_kind != "cube" ||
+        !ctx->LastCommitted().has_value() ||
+        std::string_view(ctx->LastCommitted()->mnemonic) != "BSTART.TGEMV" ||
+        std::string_view(ctx->LastCommitted()->block_kind) != "cube") {
+      return 26;
+    }
+  }
+
+  {
+    const auto bytes = EncodedBytes(BuildZeroInst("7e529b871832")); // CASB
+    if (bytes.empty()) {
+      return 27;
+    }
+    auto ctx = std::make_shared<ExecutionContext>();
+    ctx->LoadProgram(LoadRawBinaryImageFromBytes(bytes, "casb-unsupported", 0));
+    ReferenceExecutor executor(ctx);
+    if (executor.Step() || !ctx->Terminated() || ctx->ExitCode() != 1 ||
+        ctx->LastError() != "unsupported_instruction:CASB" || !ctx->LastCommitted().has_value() ||
+        std::string_view(ctx->LastCommitted()->mnemonic) != "CASB" ||
+        std::string_view(ctx->LastCommitted()->opcode_class) != "atomic") {
+      return 28;
+    }
+  }
+
   return 0;
 }
 
@@ -63,6 +147,53 @@ int TestReferenceExecutorExit() {
   }
   if (ctx->Committed().size() < 4U) {
     return 5;
+  }
+  return 0;
+}
+
+int TestReferenceExecutorImmediateContracts() {
+  const std::vector<std::uint8_t> program = {
+      0xfe, 0xff, 0x17, 0xf1, 0xff, 0xff, // hl.lui 0xffffffff, ->a0
+      0x1e, 0x11, 0x97, 0x1f, 0x11, 0x11, // hl.lui 0x11111111, ->t
+      0x2e, 0x22, 0x17, 0x2f, 0x22, 0x22, // hl.lui 0x22222222, ->u
+      0x19, 0xa2, 0x11, 0x00,             // lwi [a1, 4], ->a2
+      0xd9, 0xaf, 0x32, 0xfe,             // swi a3, [a1, -4]
+  };
+
+  auto ctx = std::make_shared<ExecutionContext>();
+  ctx->LoadProgram(LoadRawBinaryImageFromBytes(program, "immediate-contracts", 0x1000));
+  ctx->State().tq = {0x10, 0x11, 0x12, 0x13};
+  ctx->State().uq = {0x20, 0x21, 0x22, 0x23};
+  ctx->State().gpr[3] = UINT64_MAX - 3; // a1; +4 wraps to zero
+  ctx->State().gpr[5] = 0x11223344;     // a3
+  ctx->Write32(0, 0x89abcdef);
+
+  ReferenceExecutor executor(ctx);
+  if (!executor.Step() || ctx->State().gpr[2] != UINT64_MAX || !ctx->LastCommitted().has_value() ||
+      ctx->LastCommitted()->dst0.data != UINT64_MAX) {
+    return 18;
+  }
+  if (!executor.Step() ||
+      ctx->State().tq != std::array<std::uint64_t, 4>{0x11111111, 0x10, 0x11, 0x12} ||
+      ctx->State().uq != std::array<std::uint64_t, 4>{0x20, 0x21, 0x22, 0x23} ||
+      !ctx->LastCommitted().has_value() || ctx->LastCommitted()->dst0.data != 0x11111111) {
+    return 19;
+  }
+  if (!executor.Step() ||
+      ctx->State().uq != std::array<std::uint64_t, 4>{0x22222222, 0x20, 0x21, 0x22} ||
+      ctx->State().tq != std::array<std::uint64_t, 4>{0x11111111, 0x10, 0x11, 0x12} ||
+      !ctx->LastCommitted().has_value() || ctx->LastCommitted()->dst0.data != 0x22222222) {
+    return 20;
+  }
+  if (!executor.Step() || ctx->State().gpr[4] != 0xffffffff89abcdefULL ||
+      !ctx->LastCommitted().has_value() || ctx->LastCommitted()->memory.addr != 0 ||
+      ctx->LastCommitted()->memory.rdata != 0xffffffff89abcdefULL) {
+    return 21;
+  }
+  ctx->State().gpr[3] = 2; // a1; -4 wraps to UINT64_MAX - 1
+  if (!executor.Step() || ctx->Read32(UINT64_MAX - 1).value_or(0) != 0x11223344U ||
+      !ctx->LastCommitted().has_value() || ctx->LastCommitted()->memory.addr != UINT64_MAX - 1) {
+    return 22;
   }
   return 0;
 }
@@ -165,6 +296,9 @@ int main() {
   if (const int rc = TestReferenceExecutorExit(); rc != 0) {
     return rc;
   }
+  if (const int rc = TestReferenceExecutorImmediateContracts(); rc != 0) {
+    return rc;
+  }
   if (const int rc = TestFinisherContract(); rc != 0) {
     return rc;
   }
@@ -172,6 +306,9 @@ int main() {
     return rc;
   }
   if (const int rc = TestMinstRecordDumpFormatting(); rc != 0) {
+    return rc;
+  }
+  if (const int rc = TestV057TileHeadersAndUnsupportedScalar(); rc != 0) {
     return rc;
   }
   return 0;

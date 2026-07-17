@@ -56,6 +56,23 @@ void WriteGpr(LinxState &state, std::uint64_t idx, std::uint64_t value) {
   state.gpr[idx] = value;
 }
 
+void PushQueue(std::array<std::uint64_t, kLinxQueueCount> &queue, std::uint64_t value) {
+  for (std::size_t idx = queue.size() - 1; idx > 0; --idx) {
+    queue[idx] = queue[idx - 1];
+  }
+  queue[0] = value;
+}
+
+void WriteHlLuiDest(LinxState &state, std::uint64_t idx, std::uint64_t value) {
+  if (idx == 31) {
+    PushQueue(state.tq, value);
+  } else if (idx == 30) {
+    PushQueue(state.uq, value);
+  } else {
+    WriteGpr(state, idx, value);
+  }
+}
+
 std::string ResolveBlockKind(const isa::Minst &inst, const LinxState &state) {
   if (inst.mnemonic == "C.BSTART.VPAR") {
     return "vpar";
@@ -63,8 +80,23 @@ std::string ResolveBlockKind(const isa::Minst &inst, const LinxState &state) {
   if (inst.mnemonic == "C.BSTART.VSEQ") {
     return "vseq";
   }
-  if (inst.mnemonic == "BSTART.TLOAD" || inst.mnemonic == "BSTART.TMA" ||
-      inst.mnemonic == "BSTART.TEPL" || inst.mnemonic == "BSTART.CUBE") {
+  if (inst.mnemonic == "BSTART.TEPL") {
+    return "tepl";
+  }
+  if (inst.mnemonic == "BSTART.CUBE" || inst.mnemonic == "BSTART.TMATMUL" ||
+      inst.mnemonic == "BSTART.TMATMUL.ACC" || inst.mnemonic == "BSTART.TMATMUL.BIAS" ||
+      inst.mnemonic == "BSTART.TMATMULMX" || inst.mnemonic == "BSTART.TMATMULMX.ACC" ||
+      inst.mnemonic == "BSTART.TMATMULMX.BIAS" || inst.mnemonic == "BSTART.TGEMV" ||
+      inst.mnemonic == "BSTART.TGEMV.ACC" || inst.mnemonic == "BSTART.TGEMV.BIAS" ||
+      inst.mnemonic == "BSTART.TGEMVMX" || inst.mnemonic == "BSTART.TGEMVMX.ACC" ||
+      inst.mnemonic == "BSTART.TGEMVMX.BIAS") {
+    return "cube";
+  }
+  if (inst.mnemonic == "BSTART.TLOAD" || inst.mnemonic == "BSTART.TSTORE" ||
+      inst.mnemonic == "BSTART.TMOV" || inst.mnemonic == "BSTART.TPREFETCH" ||
+      inst.mnemonic == "BSTART.TMA" || inst.mnemonic == "BSTART.MGATHER" ||
+      inst.mnemonic == "BSTART.MSCATTER" || inst.mnemonic == "BSTART.MGATHER.MASK" ||
+      inst.mnemonic == "BSTART.MSCATTER.MASK" || inst.mnemonic == "BSTART.MGATHER.CAS") {
     return "tma";
   }
   if (inst.mnemonic == "SSRSET" || inst.mnemonic == "HL.SSRSET") {
@@ -75,6 +107,16 @@ std::string ResolveBlockKind(const isa::Minst &inst, const LinxState &state) {
 
 int ResolveLaneId(std::string_view block_kind) {
   return (block_kind == "vpar" || block_kind == "vseq") ? 0 : -1;
+}
+
+bool IsTileHeader(const isa::Minst &inst) {
+  const auto block_kind = ResolveBlockKind(inst, LinxState{});
+  return block_kind == "tma" || block_kind == "cube" || block_kind == "tepl";
+}
+
+bool IsUnsupportedV057Scalar(const isa::Minst &inst) {
+  return inst.mnemonic == "CASB" || inst.mnemonic == "CASH" || inst.mnemonic == "CASW" ||
+         inst.mnemonic == "CASD" || inst.mnemonic == "DMA";
 }
 
 } // namespace
@@ -212,13 +254,10 @@ void ReferenceExecutor::Execute(isa::Minst &inst) {
   } else if (inst.mnemonic == "HL.LUI") {
     const auto rd = inst.dsts.empty() ? 0 : inst.dsts.front().value;
     const auto imm = GetUnsignedAny(inst, {"imm", "simm22", "simm"}).value_or(0);
-    if (rd >= kLinxGprCount) {
-      state.tq[0] = imm;
-      commit_record.dst0.data = state.tq[0];
-    } else {
-      WriteGpr(state, rd, imm);
-      commit_record.dst0.data = ReadGpr(state, rd);
-    }
+    const auto value = static_cast<std::uint64_t>(
+        static_cast<std::int64_t>(static_cast<std::int32_t>(static_cast<std::uint32_t>(imm))));
+    WriteHlLuiDest(state, rd, value);
+    commit_record.dst0.data = value;
     state.pc = inst.next_pc;
   } else if (inst.mnemonic == "ADDI") {
     const auto rd = inst.dsts.empty() ? 0 : inst.dsts.front().value;
@@ -230,11 +269,14 @@ void ReferenceExecutor::Execute(isa::Minst &inst) {
   } else if (inst.mnemonic == "LWI") {
     const auto rd = inst.dsts.empty() ? 0 : inst.dsts.front().value;
     const auto base = ReadGpr(state, inst.srcs.empty() ? 0 : inst.srcs.front().value);
-    const auto off = GetSignedAny(inst, {"simm", "simm12"}).value_or(0);
-    const auto addr = static_cast<std::uint64_t>(static_cast<std::int64_t>(base) + off);
-    const auto value = ctx.Read32(addr).value_or(0);
+    const auto off =
+        static_cast<std::uint64_t>(GetSignedAny(inst, {"simm", "simm12"}).value_or(0)) * 4U;
+    const auto addr = base + off;
+    const auto raw_value = ctx.Read32(addr).value_or(0);
+    const auto value =
+        static_cast<std::uint64_t>(static_cast<std::int64_t>(static_cast<std::int32_t>(raw_value)));
     WriteGpr(state, rd, value);
-    commit_record.dst0.data = ReadGpr(state, rd);
+    commit_record.dst0.data = value;
     commit_record.memory.valid = 1;
     commit_record.memory.is_load = 1;
     commit_record.memory.addr = addr;
@@ -244,8 +286,9 @@ void ReferenceExecutor::Execute(isa::Minst &inst) {
   } else if (inst.mnemonic == "SWI") {
     const auto value = ReadGpr(state, inst.srcs.empty() ? 0 : inst.srcs.front().value);
     const auto base = ReadGpr(state, inst.srcs.size() > 1U ? inst.srcs[1].value : 0);
-    const auto off = GetSignedAny(inst, {"simm", "simm12"}).value_or(0);
-    const auto addr = static_cast<std::uint64_t>(static_cast<std::int64_t>(base) + off);
+    const auto off =
+        static_cast<std::uint64_t>(GetSignedAny(inst, {"simm", "simm12"}).value_or(0)) * 4U;
+    const auto addr = base + off;
     ctx.Write32(addr, static_cast<std::uint32_t>(value));
     commit_record.memory.valid = 1;
     commit_record.memory.is_store = 1;
@@ -288,10 +331,18 @@ void ReferenceExecutor::Execute(isa::Minst &inst) {
       ctx.Write8(dst_addr + idx, value);
     }
     state.pc = inst.next_pc;
-  } else if (inst.mnemonic == "BSTART.TLOAD" || inst.mnemonic == "B.TEXT") {
-    state.block_kind = "tma";
+  } else if (IsTileHeader(inst) || inst.mnemonic == "B.TEXT") {
+    const auto header_block_kind =
+        inst.mnemonic == "B.TEXT" ? std::string("tma") : current_block_kind;
+    state.block_kind = header_block_kind;
     state.pc = inst.next_pc;
-    std::strncpy(commit_record.block_kind, "tma", sizeof(commit_record.block_kind) - 1U);
+    commit_record.block_kind[0] = 0;
+    std::strncpy(commit_record.block_kind, header_block_kind.c_str(),
+                 sizeof(commit_record.block_kind) - 1U);
+  } else if (IsUnsupportedV057Scalar(inst)) {
+    inst.annotation = "v0.57 scalar AMO decoded; reference executor semantics are not implemented";
+    state.pc = inst.next_pc;
+    ctx.RequestTerminate(1, std::string("unsupported_instruction:") + std::string(inst.mnemonic));
   } else {
     state.pc = inst.next_pc;
   }

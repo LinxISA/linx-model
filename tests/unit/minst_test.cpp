@@ -19,12 +19,14 @@ using linx::model::isa::DecodeMinstPacked;
 using linx::model::isa::EncodeMinst;
 using linx::model::isa::FieldsFor;
 using linx::model::isa::LookupFormByMnemonic;
+using linx::model::isa::LookupFormByUid;
 using linx::model::isa::Minst;
 using linx::model::isa::MinstCodecStatus;
 using linx::model::isa::MinstConstraintDesc;
 using linx::model::isa::MinstConstraintOp;
 using linx::model::isa::MinstFieldDesc;
 using linx::model::isa::MinstFormDesc;
+using linx::model::isa::MinstOpcodeClass;
 using linx::model::isa::MinstPtr;
 using linx::model::isa::MinstStage;
 
@@ -223,7 +225,7 @@ int RunConstraintViolationSmoke() {
 
 int RunCoverageRoundTripSmoke() {
   const auto forms = AllMinstForms();
-  if (forms.size() != 747) {
+  if (forms.size() != 769) {
     return 20;
   }
 
@@ -247,6 +249,85 @@ int RunCoverageRoundTripSmoke() {
     if (!reencoded.valid || reencoded.bits != encoded.bits ||
         reencoded.length_bits != encoded.length_bits) {
       return 24;
+    }
+  }
+
+  return 0;
+}
+
+int RunV057DeltaDecodeSmoke() {
+  struct ExpectedForm {
+    std::string_view uid;
+    std::string_view mnemonic;
+    MinstOpcodeClass opcode_class;
+  };
+
+  constexpr std::array<ExpectedForm, 11> kExpectedForms = {{
+      {"d5f83e5aadf6", "BSTART.TPREFETCH", MinstOpcodeClass::System},
+      {"5573241cd944", "BSTART.MGATHER.MASK", MinstOpcodeClass::System},
+      {"2a33eed646f7", "BSTART.MSCATTER.MASK", MinstOpcodeClass::System},
+      {"fd8c8a3b720a", "BSTART.MGATHER.CAS", MinstOpcodeClass::System},
+      {"2c07e7177fad", "B.IOT", MinstOpcodeClass::System},
+      {"c11eb189dd83", "B.IOT", MinstOpcodeClass::System},
+      {"ae19f5b678f5", "BSTART.TGEMV", MinstOpcodeClass::System},
+      {"098c7efa51b0", "BSTART.TMATMULMX.BIAS", MinstOpcodeClass::System},
+      {"7e529b871832", "CASB", MinstOpcodeClass::Atomic},
+      {"5852c57277a6", "CASD", MinstOpcodeClass::Atomic},
+      {"a168aeca5fa5", "DMA", MinstOpcodeClass::Atomic},
+  }};
+
+  for (const auto &expected : kExpectedForms) {
+    const auto *form = LookupFormByUid(expected.uid);
+    if (form == nullptr || form->mnemonic != expected.mnemonic) {
+      return 60;
+    }
+    Minst inst = BuildSatisfyingInst(*form);
+    if (inst.opcode_class != expected.opcode_class) {
+      return 61;
+    }
+    if (expected.mnemonic == std::string_view("BSTART.TPREFETCH") && !inst.dsts.empty()) {
+      return 62;
+    }
+
+    const auto encoded = EncodeMinst(inst);
+    if (!encoded.valid || encoded.status != MinstCodecStatus::Ok) {
+      return 63;
+    }
+    Minst decoded;
+    if (DecodeMinstPacked(encoded.bits, encoded.length_bits, decoded) != MinstCodecStatus::Ok) {
+      return 64;
+    }
+    if (decoded.form_id != expected.uid || decoded.mnemonic != expected.mnemonic ||
+        decoded.opcode_class != expected.opcode_class) {
+      return 65;
+    }
+  }
+
+  return 0;
+}
+
+int RunV057TeplSelectorSmoke() {
+  const auto *form = LookupFormByUid("d022db6dacb3");
+  if (form == nullptr || form->mnemonic != "BSTART.TEPL") {
+    return 70;
+  }
+
+  for (const auto selector : {0x048, 0x0e2}) {
+    Minst inst = BuildSatisfyingInst(*form);
+    inst.SetDecodedField("TileOpcode", selector, false, 12);
+    inst.RebuildTypedViews();
+
+    const auto encoded = EncodeMinst(inst);
+    if (!encoded.valid || encoded.status != MinstCodecStatus::Ok) {
+      return 71;
+    }
+    Minst decoded;
+    if (DecodeMinstPacked(encoded.bits, encoded.length_bits, decoded) != MinstCodecStatus::Ok) {
+      return 72;
+    }
+    const auto tile_opcode = decoded.GetFieldUnsigned("TileOpcode");
+    if (!tile_opcode.has_value() || *tile_opcode != static_cast<std::uint64_t>(selector)) {
+      return 73;
     }
   }
 
@@ -398,6 +479,16 @@ int main() {
   if (asm_replace != 0) {
     std::cerr << "RunAsmTemplateReplacementSmoke failed with code " << asm_replace << '\n';
     return 6;
+  }
+  const auto v057_delta = RunV057DeltaDecodeSmoke();
+  if (v057_delta != 0) {
+    std::cerr << "RunV057DeltaDecodeSmoke failed with code " << v057_delta << '\n';
+    return 7;
+  }
+  const auto v057_tepl = RunV057TeplSelectorSmoke();
+  if (v057_tepl != 0) {
+    std::cerr << "RunV057TeplSelectorSmoke failed with code " << v057_tepl << '\n';
+    return 8;
   }
   return 0;
 }

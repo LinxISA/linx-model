@@ -4,6 +4,8 @@ from __future__ import annotations
 import argparse
 import json
 from pathlib import Path
+import shutil
+import subprocess
 
 
 def c_string(value: str) -> str:
@@ -294,11 +296,20 @@ def render_source(out_path: Path, forms: list[dict], fields: list[dict], pieces:
     out_path.write_text("\n".join(lines) + "\n")
 
 
+def format_generated_cpp(paths: list[Path]) -> None:
+    clang_format = shutil.which("clang-format")
+    if clang_format is None:
+        raise RuntimeError("clang-format is required to generate committed Minst codec tables")
+    subprocess.run([clang_format, "-i", *map(str, paths)], check=True)
+
+
 def main() -> int:
+    model_root = Path(__file__).resolve().parents[2]
+    superproject_root = model_root.parents[1]
     parser = argparse.ArgumentParser()
     parser.add_argument(
         "--spec",
-        default="/Users/zhoubot/linx-isa/isa/v0.56/linxisa-v0.56.json",
+        default=superproject_root / "isa/v0.57/linxisa-v0.57.json",
     )
     parser.add_argument(
         "--header",
@@ -312,8 +323,11 @@ def main() -> int:
 
     spec = json.loads(Path(args.spec).read_text())
     forms, fields, pieces, constraints = build_forms(spec)
-    render_header(Path(args.header))
-    render_source(Path(args.source), forms, fields, pieces, constraints)
+    header = Path(args.header)
+    source = Path(args.source)
+    render_header(header)
+    render_source(source, forms, fields, pieces, constraints)
+    format_generated_cpp([header, source])
     print(f"generated {len(forms)} forms, {len(fields)} fields, {len(pieces)} pieces, {len(constraints)} constraints")
     return 0
 
