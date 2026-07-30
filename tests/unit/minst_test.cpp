@@ -225,7 +225,7 @@ int RunConstraintViolationSmoke() {
 
 int RunCoverageRoundTripSmoke() {
   const auto forms = AllMinstForms();
-  if (forms.size() != 769) {
+  if (forms.size() != 768) {
     return 20;
   }
 
@@ -267,8 +267,8 @@ int RunV057DeltaDecodeSmoke() {
       {"5573241cd944", "BSTART.MGATHER.MASK", MinstOpcodeClass::System},
       {"2a33eed646f7", "BSTART.MSCATTER.MASK", MinstOpcodeClass::System},
       {"fd8c8a3b720a", "BSTART.MGATHER.CAS", MinstOpcodeClass::System},
-      {"2c07e7177fad", "B.IOT", MinstOpcodeClass::System},
-      {"c11eb189dd83", "B.IOT", MinstOpcodeClass::System},
+      {"0f23e46d6176", "B.IOT", MinstOpcodeClass::System},
+      {"3a6945dec034", "B.IOT", MinstOpcodeClass::System},
       {"ae19f5b678f5", "BSTART.TGEMV", MinstOpcodeClass::System},
       {"098c7efa51b0", "BSTART.TMATMULMX.BIAS", MinstOpcodeClass::System},
       {"7e529b871832", "CASB", MinstOpcodeClass::Atomic},
@@ -303,18 +303,34 @@ int RunV057DeltaDecodeSmoke() {
     }
   }
 
+  if (LookupFormByMnemonic("BSTART.CUBE") != nullptr ||
+      LookupFormByMnemonic("BSTART.TMA") != nullptr) {
+    return 66;
+  }
+
   return 0;
 }
 
 int RunV057TeplSelectorSmoke() {
-  const auto *form = LookupFormByUid("d022db6dacb3");
+  const auto *form = LookupFormByUid("bff5143d4fe3");
   if (form == nullptr || form->mnemonic != "BSTART.TEPL") {
     return 70;
   }
+  for (const auto &field : FieldsFor(*form)) {
+    if (field.name == std::string_view("TileOpcode")) {
+      return 74;
+    }
+  }
 
-  for (const auto selector : {0x048, 0x0e2}) {
+  struct Selector {
+    std::uint64_t mode;
+    std::uint64_t function;
+  };
+
+  for (const auto selector : {Selector{0x0, 0x08}, Selector{0x3, 0x02}}) {
     Minst inst = BuildSatisfyingInst(*form);
-    inst.SetDecodedField("TileOpcode", selector, false, 12);
+    inst.SetDecodedField("Mode", selector.mode, false, 2);
+    inst.SetDecodedField("Function", selector.function, false, 5);
     inst.RebuildTypedViews();
 
     const auto encoded = EncodeMinst(inst);
@@ -325,8 +341,10 @@ int RunV057TeplSelectorSmoke() {
     if (DecodeMinstPacked(encoded.bits, encoded.length_bits, decoded) != MinstCodecStatus::Ok) {
       return 72;
     }
-    const auto tile_opcode = decoded.GetFieldUnsigned("TileOpcode");
-    if (!tile_opcode.has_value() || *tile_opcode != static_cast<std::uint64_t>(selector)) {
+    const auto mode = decoded.GetFieldUnsigned("Mode");
+    const auto function = decoded.GetFieldUnsigned("Function");
+    if (!mode.has_value() || !function.has_value() || *mode != selector.mode ||
+        *function != selector.function) {
       return 73;
     }
   }

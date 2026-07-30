@@ -83,8 +83,8 @@ std::string ResolveBlockKind(const isa::Minst &inst, const LinxState &state) {
   if (inst.mnemonic == "BSTART.TEPL") {
     return "tepl";
   }
-  if (inst.mnemonic == "BSTART.CUBE" || inst.mnemonic == "BSTART.TMATMUL" ||
-      inst.mnemonic == "BSTART.TMATMUL.ACC" || inst.mnemonic == "BSTART.TMATMUL.BIAS" ||
+  if (inst.mnemonic == "BSTART.TMATMUL" || inst.mnemonic == "BSTART.TMATMUL.ACC" ||
+      inst.mnemonic == "BSTART.TMATMUL.BIAS" ||
       inst.mnemonic == "BSTART.TMATMULMX" || inst.mnemonic == "BSTART.TMATMULMX.ACC" ||
       inst.mnemonic == "BSTART.TMATMULMX.BIAS" || inst.mnemonic == "BSTART.TGEMV" ||
       inst.mnemonic == "BSTART.TGEMV.ACC" || inst.mnemonic == "BSTART.TGEMV.BIAS" ||
@@ -94,9 +94,9 @@ std::string ResolveBlockKind(const isa::Minst &inst, const LinxState &state) {
   }
   if (inst.mnemonic == "BSTART.TLOAD" || inst.mnemonic == "BSTART.TSTORE" ||
       inst.mnemonic == "BSTART.TMOV" || inst.mnemonic == "BSTART.TPREFETCH" ||
-      inst.mnemonic == "BSTART.TMA" || inst.mnemonic == "BSTART.MGATHER" ||
-      inst.mnemonic == "BSTART.MSCATTER" || inst.mnemonic == "BSTART.MGATHER.MASK" ||
-      inst.mnemonic == "BSTART.MSCATTER.MASK" || inst.mnemonic == "BSTART.MGATHER.CAS") {
+      inst.mnemonic == "BSTART.MGATHER" || inst.mnemonic == "BSTART.MSCATTER" ||
+      inst.mnemonic == "BSTART.MGATHER.MASK" || inst.mnemonic == "BSTART.MSCATTER.MASK" ||
+      inst.mnemonic == "BSTART.MGATHER.CAS") {
     return "tma";
   }
   if (inst.mnemonic == "SSRSET" || inst.mnemonic == "HL.SSRSET") {
@@ -340,7 +340,7 @@ void ReferenceExecutor::Execute(isa::Minst &inst) {
     std::strncpy(commit_record.block_kind, header_block_kind.c_str(),
                  sizeof(commit_record.block_kind) - 1U);
   } else if (IsUnsupportedV057Scalar(inst)) {
-    inst.annotation = "v0.57 scalar AMO decoded; reference executor semantics are not implemented";
+    inst.annotation = "0.57.1 scalar AMO decoded; reference executor semantics are not implemented";
     state.pc = inst.next_pc;
     ctx.RequestTerminate(1, std::string("unsupported_instruction:") + std::string(inst.mnemonic));
   } else {
