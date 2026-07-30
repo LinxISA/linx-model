@@ -303,11 +303,9 @@ int RunV057DeltaDecodeSmoke() {
     }
   }
 
-  if (AllMinstForms().size() != 761 ||
-      LookupFormByMnemonic("BSTART.CUBE") != nullptr ||
+  if (AllMinstForms().size() != 761 || LookupFormByMnemonic("BSTART.CUBE") != nullptr ||
       LookupFormByMnemonic("BSTART.TMA") != nullptr ||
-      LookupFormByMnemonic("BSTART.FIXP") != nullptr ||
-      LookupFormByMnemonic("B.ARG") != nullptr) {
+      LookupFormByMnemonic("BSTART.FIXP") != nullptr || LookupFormByMnemonic("B.ARG") != nullptr) {
     return 66;
   }
 

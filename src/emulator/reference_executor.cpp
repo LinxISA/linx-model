@@ -84,12 +84,11 @@ std::string ResolveBlockKind(const isa::Minst &inst, const LinxState &state) {
     return "tepl";
   }
   if (inst.mnemonic == "BSTART.TMATMUL" || inst.mnemonic == "BSTART.TMATMUL.ACC" ||
-      inst.mnemonic == "BSTART.TMATMUL.BIAS" ||
-      inst.mnemonic == "BSTART.TMATMULMX" || inst.mnemonic == "BSTART.TMATMULMX.ACC" ||
-      inst.mnemonic == "BSTART.TMATMULMX.BIAS" || inst.mnemonic == "BSTART.TGEMV" ||
-      inst.mnemonic == "BSTART.TGEMV.ACC" || inst.mnemonic == "BSTART.TGEMV.BIAS" ||
-      inst.mnemonic == "BSTART.TGEMVMX" || inst.mnemonic == "BSTART.TGEMVMX.ACC" ||
-      inst.mnemonic == "BSTART.TGEMVMX.BIAS") {
+      inst.mnemonic == "BSTART.TMATMUL.BIAS" || inst.mnemonic == "BSTART.TMATMULMX" ||
+      inst.mnemonic == "BSTART.TMATMULMX.ACC" || inst.mnemonic == "BSTART.TMATMULMX.BIAS" ||
+      inst.mnemonic == "BSTART.TGEMV" || inst.mnemonic == "BSTART.TGEMV.ACC" ||
+      inst.mnemonic == "BSTART.TGEMV.BIAS" || inst.mnemonic == "BSTART.TGEMVMX" ||
+      inst.mnemonic == "BSTART.TGEMVMX.ACC" || inst.mnemonic == "BSTART.TGEMVMX.BIAS") {
     return "cube";
   }
   if (inst.mnemonic == "BSTART.TLOAD" || inst.mnemonic == "BSTART.TSTORE" ||
