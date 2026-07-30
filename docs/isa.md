@@ -5,8 +5,8 @@
 `linx-model` ships a committed generated LinxISA 0.57.1 codec for `isa::Minst`.
 The source of truth is:
 
-- `/Users/zhoubot/linx-isa/isa/v0.57/linxisa-v0.57.json` from the 0.57.1
-  projection
+- `isa/v0.57/linxisa-v0.57.json` from the LinxISA 0.57.1 projection, generated
+  from the locked PTO-ISA/pto-spec release
 
 The generated C++ tables are committed under:
 
@@ -48,6 +48,8 @@ Decoder behavior:
 - chooses the unique most-specific form by fixed-bit count
 - validates field constraints
 - populates `Minst` metadata and typed views
+- exposes exactly 761 current LinxISA forms and rejects retired `B.ARG`,
+  `BSTART.FIXP`, and generic `BSTART.CUBE`/`BSTART.TMA` spellings
 
 Encoder behavior:
 
