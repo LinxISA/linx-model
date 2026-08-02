@@ -34,8 +34,8 @@
       "stop_pc": "0x22",
       "min_records": 2,
       "require_block_kind_any_of": ["tma", "cube", "tepl"],
-      "expect_disasm_any_of": ["BSTART.TLOAD", "BSTART.TMA", "BSTART.CUBE", "BSTART.TEPL"],
-      "expect_mnemonics_any_of": ["BSTART.TLOAD", "BSTART.TMA", "BSTART.CUBE", "BSTART.TEPL"]
+      "expect_disasm_any_of": ["BSTART.TLOAD", "BSTART.TEPL"],
+      "expect_mnemonics_any_of": ["BSTART.TLOAD", "BSTART.TEPL"]
     },
     {
       "id": "MODEL-TILE-CONTROL-FLOW",

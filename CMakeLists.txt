@@ -45,7 +45,7 @@ add_custom_target(
           --header "${CMAKE_CURRENT_SOURCE_DIR}/include/linx/model/isa/generated_tables.hpp"
           --source "${CMAKE_CURRENT_SOURCE_DIR}/src/isa/generated_tables.cpp"
   WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
-  COMMENT "Regenerating committed LinxISA v0.57 Minst codec tables")
+  COMMENT "Regenerating committed LinxISA 0.57.1 Minst codec tables")
 
 target_include_directories(
   linx_model
