@@ -225,7 +225,7 @@ int RunConstraintViolationSmoke() {
 
 int RunCoverageRoundTripSmoke() {
   const auto forms = AllMinstForms();
-  if (forms.size() != 761) {
+  if (forms.size() != 766) {
     return 20;
   }
 
@@ -255,7 +255,7 @@ int RunCoverageRoundTripSmoke() {
   return 0;
 }
 
-int RunV057DeltaDecodeSmoke() {
+int RunV058DeltaDecodeSmoke() {
   struct ExpectedForm {
     std::string_view uid;
     std::string_view mnemonic;
@@ -263,14 +263,14 @@ int RunV057DeltaDecodeSmoke() {
   };
 
   constexpr std::array<ExpectedForm, 11> kExpectedForms = {{
-      {"d5f83e5aadf6", "BSTART.TPREFETCH", MinstOpcodeClass::System},
-      {"5573241cd944", "BSTART.MGATHER.MASK", MinstOpcodeClass::System},
-      {"2a33eed646f7", "BSTART.MSCATTER.MASK", MinstOpcodeClass::System},
-      {"fd8c8a3b720a", "BSTART.MGATHER.CAS", MinstOpcodeClass::System},
-      {"0f23e46d6176", "B.IOT", MinstOpcodeClass::System},
-      {"3a6945dec034", "B.IOT", MinstOpcodeClass::System},
-      {"ae19f5b678f5", "BSTART.TGEMV", MinstOpcodeClass::System},
-      {"098c7efa51b0", "BSTART.TMATMULMX.BIAS", MinstOpcodeClass::System},
+      {"3c9e83c5a42f", "BSTART.TPREFETCH", MinstOpcodeClass::System},
+      {"c53a0033eb26", "BSTART.MGATHER.MASK", MinstOpcodeClass::System},
+      {"6037e1cd885f", "BSTART.MSCATTER.MASK", MinstOpcodeClass::System},
+      {"74d282c28e52", "BSTART.MGATHER.CAS", MinstOpcodeClass::System},
+      {"11ff57a2e635", "B.IOS", MinstOpcodeClass::System},
+      {"84944b9c3d19", "B.IOT", MinstOpcodeClass::System},
+      {"5793d27aa023", "BSTART.TGEMV", MinstOpcodeClass::System},
+      {"5b20d174f5d9", "BSTART.TMATMULMX.BIAS", MinstOpcodeClass::System},
       {"7e529b871832", "CASB", MinstOpcodeClass::Atomic},
       {"5852c57277a6", "CASD", MinstOpcodeClass::Atomic},
       {"a168aeca5fa5", "DMA", MinstOpcodeClass::Atomic},
@@ -303,17 +303,18 @@ int RunV057DeltaDecodeSmoke() {
     }
   }
 
-  if (AllMinstForms().size() != 761 || LookupFormByMnemonic("BSTART.CUBE") != nullptr ||
+  if (AllMinstForms().size() != 766 || LookupFormByMnemonic("BSTART.CUBE") != nullptr ||
       LookupFormByMnemonic("BSTART.TMA") != nullptr ||
-      LookupFormByMnemonic("BSTART.FIXP") != nullptr || LookupFormByMnemonic("B.ARG") != nullptr) {
+      LookupFormByMnemonic("BSTART.FIXP") != nullptr || LookupFormByMnemonic("B.ARG") != nullptr ||
+      LookupFormByMnemonic("C.B.IOS") != nullptr) {
     return 66;
   }
 
   return 0;
 }
 
-int RunV057TeplSelectorSmoke() {
-  const auto *form = LookupFormByUid("bff5143d4fe3");
+int RunV058TeplSelectorSmoke() {
+  const auto *form = LookupFormByUid("f0754cf51a8d");
   if (form == nullptr || form->mnemonic != "BSTART.TEPL") {
     return 70;
   }
@@ -499,14 +500,14 @@ int main() {
     std::cerr << "RunAsmTemplateReplacementSmoke failed with code " << asm_replace << '\n';
     return 6;
   }
-  const auto v057_delta = RunV057DeltaDecodeSmoke();
-  if (v057_delta != 0) {
-    std::cerr << "RunV057DeltaDecodeSmoke failed with code " << v057_delta << '\n';
+  const auto v058_delta = RunV058DeltaDecodeSmoke();
+  if (v058_delta != 0) {
+    std::cerr << "RunV058DeltaDecodeSmoke failed with code " << v058_delta << '\n';
     return 7;
   }
-  const auto v057_tepl = RunV057TeplSelectorSmoke();
-  if (v057_tepl != 0) {
-    std::cerr << "RunV057TeplSelectorSmoke failed with code " << v057_tepl << '\n';
+  const auto v058_tepl = RunV058TeplSelectorSmoke();
+  if (v058_tepl != 0) {
+    std::cerr << "RunV058TeplSelectorSmoke failed with code " << v058_tepl << '\n';
     return 8;
   }
   return 0;

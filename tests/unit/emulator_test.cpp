@@ -15,6 +15,13 @@ using linx::model::emulator::DumpMinstRecord;
 using linx::model::emulator::ExecutionContext;
 using linx::model::emulator::MakeMinstRecord;
 using linx::model::emulator::ReferenceExecutor;
+using linx::model::emulator::SharedTileBank;
+using linx::model::emulator::SharedTileDescriptor;
+using linx::model::emulator::SharedTileWriteStatus;
+using linx::model::emulator::TileBindingKind;
+using linx::model::emulator::TileOperandSpace;
+using linx::model::emulator::TileOperationKind;
+using linx::model::emulator::TileSharedUse;
 using linx::model::emulator::WriteMinstRecordDump;
 using linx::model::isa::DecodeMinstPacked;
 using linx::model::isa::EncodeMinst;
@@ -62,25 +69,157 @@ int TestStateReset() {
   return 0;
 }
 
-int TestV057TileHeadersAndUnsupportedScalar() {
+int TestV058SharedTileState() {
+  SharedTileBank bank;
+  const SharedTileDescriptor descriptor{
+      .dtype = 3,
+      .valid_cols = 8,
+      .valid_rows = 4,
+      .cols = 8,
+      .rows = 4,
+  };
+
+  for (std::uint8_t code = 1; code <= 7; ++code) {
+    const auto bytes = SharedTileBank::CapacityBytes(code);
+    if (!bytes.has_value() || *bytes != (128U << (code - 1U))) {
+      return 29;
+    }
+  }
+  if (SharedTileBank::CapacityBytes(0).has_value() ||
+      SharedTileBank::CapacityBytes(8).has_value()) {
+    return 30;
+  }
+
+  std::array<std::vector<std::uint8_t>, 4> payloads{};
+  std::array<SharedTileDescriptor, 4> descriptors{};
+  descriptors.fill(descriptor);
+  descriptors[1].valid_rows = 2;
+  payloads[0].assign(128, 0x11);
+  payloads[1].assign(128, 0x22);
+  if (bank.Write(7, 0, 1, descriptor, payloads) != SharedTileWriteStatus::Noop ||
+      bank.Version(7).allocation_mask != 0 || bank.Version(7).initialized_mask != 0) {
+    return 31;
+  }
+  if (bank.Write(7, 0x3, 1, descriptors, payloads) != SharedTileWriteStatus::Applied ||
+      bank.Version(7).allocation_mask != 0x3 || bank.Version(7).initialized_mask != 0x3 ||
+      bank.Version(7).allocated_bytes != 256 || bank.Read(7, 1)->descriptor.valid_rows != 2) {
+    return 32;
+  }
+  if (bank.Read(7, 2) != nullptr || bank.Version(7).initialized_mask != 0x3) {
+    return 33;
+  }
+
+  const auto lane1_before = bank.Read(7, 1)->data;
+  payloads[0].assign(128, 0x44);
+  if (bank.Write(7, 0x1, 1, descriptor, payloads) != SharedTileWriteStatus::Applied ||
+      bank.Read(7, 0)->data.front() != 0x44 || bank.Read(7, 1)->data != lane1_before ||
+      bank.Version(7).allocation_mask != 0x3) {
+    return 34;
+  }
+
+  const auto lane0_before = bank.Read(7, 0)->data;
+  payloads[0].assign(128, 0x66);
+  payloads[1].assign(1, 0x77);
+  if (bank.Write(7, 0x3, 1, descriptors, payloads) != SharedTileWriteStatus::PayloadSizeMismatch ||
+      bank.Read(7, 0)->data != lane0_before || bank.Read(7, 1)->data != lane1_before) {
+    return 35;
+  }
+
+  payloads[1].assign(128, 0x22);
+  payloads[2].assign(128, 0x55);
+  if (bank.Write(7, 0x4, 1, descriptor, payloads) != SharedTileWriteStatus::AllocationExpansion ||
+      bank.Version(7).allocation_mask != 0x3 || bank.Read(7, 2) != nullptr) {
+    return 36;
+  }
+  auto mismatched = descriptor;
+  mismatched.dtype = 9;
+  if (bank.Write(7, 0x1, 1, mismatched, payloads) != SharedTileWriteStatus::DescriptorMismatch ||
+      bank.Read(7, 0)->descriptor.dtype != 3 || bank.Read(7, 0)->data.front() != 0x44) {
+    return 37;
+  }
+
+  bank.Reset();
+  if (bank.Version(7).allocation_mask != 0 || bank.Read(7, 0) != nullptr) {
+    return 38;
+  }
+  return 0;
+}
+
+int TestV058BindingPolicy() {
+  if (!linx::model::emulator::BindingAllows(TileBindingKind::Bior,
+                                            TileOperandSpace::ScalarAddress) ||
+      linx::model::emulator::BindingAllows(TileBindingKind::Bior, TileOperandSpace::Local) ||
+      linx::model::emulator::BindingAllows(TileBindingKind::Bior, TileOperandSpace::Shared) ||
+      !linx::model::emulator::BindingAllows(TileBindingKind::Biot, TileOperandSpace::Local) ||
+      linx::model::emulator::BindingAllows(TileBindingKind::Biot, TileOperandSpace::Shared) ||
+      !linx::model::emulator::BindingAllows(TileBindingKind::Bios, TileOperandSpace::Shared) ||
+      linx::model::emulator::BindingAllows(TileBindingKind::Bios, TileOperandSpace::Local)) {
+    return 38;
+  }
+  if (!linx::model::emulator::ValidateSharedOperation(TileOperationKind::Tmov,
+                                                      TileSharedUse::Destination, 0x3, 0x3) ||
+      linx::model::emulator::ValidateSharedOperation(TileOperationKind::Tmov,
+                                                     TileSharedUse::Destination, 0x3, 0x1) ||
+      !linx::model::emulator::ValidateSharedOperation(TileOperationKind::Cube,
+                                                      TileSharedUse::Source, 0xf, 0xf) ||
+      linx::model::emulator::ValidateSharedOperation(TileOperationKind::Cube,
+                                                     TileSharedUse::Destination, 0xf, 0xf) ||
+      linx::model::emulator::ValidateSharedOperation(TileOperationKind::Cube, TileSharedUse::Source,
+                                                     0x7, 0x7) ||
+      linx::model::emulator::ValidateSharedOperation(TileOperationKind::Tgemv,
+                                                     TileSharedUse::Source, 0xf, 0xf)) {
+    return 39;
+  }
+  return 0;
+}
+
+int TestV058BiosDecode() {
+  Minst inst;
+  if (DecodeMinstPacked(0x00001013ULL, 32, inst) != MinstCodecStatus::Ok ||
+      inst.mnemonic != "B.IOS" || inst.form_id != "11ff57a2e635") {
+    return 40;
+  }
+  const std::uint64_t boundary = 0x00001013ULL | (0xffULL << 20U) | (0xfULL << 15U) | (7ULL << 9U);
+  Minst boundary_inst;
+  if (DecodeMinstPacked(boundary, 32, boundary_inst) != MinstCodecStatus::Ok ||
+      boundary_inst.mnemonic != "B.IOS" ||
+      boundary_inst.GetFieldUnsigned("SharedTID").value_or(0) != 0xff ||
+      boundary_inst.GetFieldUnsigned("PE_MASK").value_or(0) != 0xf ||
+      boundary_inst.GetFieldUnsigned("TSize").value_or(0) != 7) {
+    return 41;
+  }
+  Minst retired;
+  if (DecodeMinstPacked(0xc03cULL, 16, retired) == MinstCodecStatus::Ok &&
+      retired.mnemonic == "C.B.IOS") {
+    return 42;
+  }
+  Minst reserved;
+  if (DecodeMinstPacked(0x10001013ULL, 32, reserved) == MinstCodecStatus::Ok &&
+      reserved.mnemonic == "B.IOS") {
+    return 43;
+  }
+  return 0;
+}
+
+int TestV058TileHeadersAndUnsupportedScalar() {
   {
-    const auto bytes = EncodedBytes(BuildZeroInst("d5f83e5aadf6")); // BSTART.TPREFETCH
+    const auto bytes = EncodedBytes(BuildZeroInst("3c9e83c5a42f")); // BSTART.TPREFETCH
     if (bytes.empty()) {
       return 23;
     }
     auto ctx = std::make_shared<ExecutionContext>();
     ctx->LoadProgram(LoadRawBinaryImageFromBytes(bytes, "tprefetch-header", 0));
     ReferenceExecutor executor(ctx);
-    if (!executor.Step() || ctx->Terminated() || ctx->State().block_kind != "tma" ||
+    if (!executor.Step() || ctx->Terminated() || ctx->State().block_kind != "tlsu" ||
         !ctx->LastCommitted().has_value() ||
         std::string_view(ctx->LastCommitted()->mnemonic) != "BSTART.TPREFETCH" ||
-        std::string_view(ctx->LastCommitted()->block_kind) != "tma") {
+        std::string_view(ctx->LastCommitted()->block_kind) != "tlsu") {
       return 24;
     }
   }
 
   {
-    const auto bytes = EncodedBytes(BuildZeroInst("ae19f5b678f5")); // BSTART.TGEMV
+    const auto bytes = EncodedBytes(BuildZeroInst("5793d27aa023")); // BSTART.TGEMV
     if (bytes.empty()) {
       return 25;
     }
@@ -290,6 +429,15 @@ int main() {
   if (const int rc = TestStateReset(); rc != 0) {
     return rc;
   }
+  if (const int rc = TestV058SharedTileState(); rc != 0) {
+    return rc;
+  }
+  if (const int rc = TestV058BindingPolicy(); rc != 0) {
+    return rc;
+  }
+  if (const int rc = TestV058BiosDecode(); rc != 0) {
+    return rc;
+  }
   if (const int rc = TestMinstRecordAdapter(); rc != 0) {
     return rc;
   }
@@ -308,7 +456,7 @@ int main() {
   if (const int rc = TestMinstRecordDumpFormatting(); rc != 0) {
     return rc;
   }
-  if (const int rc = TestV057TileHeadersAndUnsupportedScalar(); rc != 0) {
+  if (const int rc = TestV058TileHeadersAndUnsupportedScalar(); rc != 0) {
     return rc;
   }
   return 0;

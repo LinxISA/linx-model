@@ -2,7 +2,9 @@
 
 #include <array>
 #include <cstdint>
+#include <optional>
 #include <string>
+#include <vector>
 
 namespace linx::model::emulator {
 
@@ -16,6 +18,77 @@ constexpr std::size_t kLinxTileMaxIot = 32;
 constexpr std::size_t kLinxVecRiMax = kLinxTileMaxIor * 3;
 constexpr std::size_t kLinxTileMaxBytes = 64U * 1024U;
 constexpr std::size_t kLinxTileMaxWords = kLinxTileMaxBytes / 4U;
+constexpr std::size_t kLinxSharedTileCount = 256;
+constexpr std::size_t kLinxCorePeCount = 4;
+constexpr std::size_t kLinxSharedTileMaxBytes = 8U * 1024U;
+
+struct SharedTileDescriptor {
+  std::uint32_t dtype = 0;
+  std::uint16_t valid_cols = 0;
+  std::uint16_t valid_rows = 0;
+  std::uint16_t cols = 0;
+  std::uint16_t rows = 0;
+
+  bool operator==(const SharedTileDescriptor &) const = default;
+};
+
+struct SharedTileLane {
+  SharedTileDescriptor descriptor{};
+  std::vector<std::uint8_t> data{};
+};
+
+struct SharedTileVersion {
+  std::array<SharedTileLane, kLinxCorePeCount> lanes{};
+  std::uint32_t per_pe_capacity = 0;
+  std::uint32_t allocated_bytes = 0;
+  std::uint32_t dtype = 0;
+  std::uint8_t allocation_mask = 0;
+  std::uint8_t initialized_mask = 0;
+};
+
+enum class SharedTileWriteStatus : std::uint8_t {
+  Applied,
+  Noop,
+  InvalidRegister,
+  InvalidMask,
+  InvalidSize,
+  InvalidDescriptor,
+  PayloadSizeMismatch,
+  AllocationExpansion,
+  DescriptorMismatch,
+};
+
+class SharedTileBank {
+public:
+  static std::optional<std::uint32_t> CapacityBytes(std::uint8_t size_code) noexcept;
+
+  [[nodiscard]] SharedTileWriteStatus
+  Write(std::uint16_t shared_id, std::uint8_t pe_mask, std::uint8_t size_code,
+        const SharedTileDescriptor &descriptor,
+        const std::array<std::vector<std::uint8_t>, kLinxCorePeCount> &payloads);
+  [[nodiscard]] SharedTileWriteStatus
+  Write(std::uint16_t shared_id, std::uint8_t pe_mask, std::uint8_t size_code,
+        const std::array<SharedTileDescriptor, kLinxCorePeCount> &descriptors,
+        const std::array<std::vector<std::uint8_t>, kLinxCorePeCount> &payloads);
+
+  [[nodiscard]] const SharedTileLane *Read(std::uint16_t shared_id,
+                                           std::uint8_t pe_id) const noexcept;
+  [[nodiscard]] const SharedTileVersion &Version(std::uint16_t shared_id) const noexcept;
+  void Reset() noexcept;
+
+private:
+  std::array<SharedTileVersion, kLinxSharedTileCount> versions_{};
+};
+
+enum class TileBindingKind : std::uint8_t { Bior, Biot, Bios };
+enum class TileOperandSpace : std::uint8_t { ScalarAddress, Local, Shared };
+enum class TileOperationKind : std::uint8_t { Tmov, Cube, Tgemv };
+enum class TileSharedUse : std::uint8_t { None, Source, Destination };
+
+[[nodiscard]] bool BindingAllows(TileBindingKind binding, TileOperandSpace space) noexcept;
+[[nodiscard]] bool ValidateSharedOperation(TileOperationKind operation, TileSharedUse shared_use,
+                                           std::uint8_t shared_mask,
+                                           std::uint8_t local_mask) noexcept;
 
 struct LinxAcrBlockState {
   std::array<std::uint64_t, kLinxQueueCount> tq{};
@@ -134,6 +207,7 @@ struct LinxState {
   std::array<std::uint32_t, 32> tile_reg_bytes{};
   std::array<std::uint32_t, kLinxTileMaxWords> tile_acc{};
   std::uint32_t tile_acc_bytes = 0;
+  SharedTileBank shared_tile{};
   std::uint64_t bpc = 0;
   std::uint64_t insn_pc_next = 0;
   std::uint64_t pc = 0;

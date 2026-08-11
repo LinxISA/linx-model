@@ -1,0 +1,112 @@
+{
+  "schema": "linx-pto-v058-shared-state-v1",
+  "pto_isa_release": "0.58.0",
+  "pto_spec_commit": "8a77c9f0eab36cc41051519366ff163171f81463",
+  "pe_count": 4,
+  "shared_tile_ids": [0, 255],
+  "tsize_bytes_per_pe": {
+    "1": 128,
+    "2": 256,
+    "3": 512,
+    "4": 1024,
+    "5": 2048,
+    "6": 4096,
+    "7": 8192
+  },
+  "scenarios": [
+    {
+      "id": "tlsu-zero-mask-noop",
+      "operation": "TLSU",
+      "input": {"shared_tid": 0, "pe_mask": "0b0000", "tsize_code": 1},
+      "expected": {"status": "no-op", "state_unchanged": true}
+    },
+    {
+      "id": "tlsu-first-allocation",
+      "operation": "TLSU",
+      "input": {
+        "shared_tid": 0,
+        "pe_mask": "0b0101",
+        "tsize_code": 2,
+        "descriptors": {"0": {"rows": 8, "cols": 8}, "2": {"rows": 4, "cols": 16}},
+        "payload_bytes": {"0": 256, "2": 256}
+      },
+      "expected": {
+        "status": "applied",
+        "allocation_mask": "0b0101",
+        "initialized_mask": "0b0101",
+        "core_charge_bytes": 512
+      }
+    },
+    {
+      "id": "tlsu-subset-update",
+      "operation": "TLSU",
+      "precondition": {"allocation_mask": "0b0101", "initialized_mask": "0b0101"},
+      "input": {"shared_tid": 0, "pe_mask": "0b0001", "tsize_code": 2, "payload_bytes": {"0": 256}},
+      "expected": {"status": "applied", "allocation_mask": "0b0101", "initialized_mask": "0b0101"}
+    },
+    {
+      "id": "tlsu-expansion-rejected",
+      "operation": "TLSU",
+      "precondition": {"allocation_mask": "0b0101", "initialized_mask": "0b0101"},
+      "input": {"shared_tid": 0, "pe_mask": "0b0111", "tsize_code": 2},
+      "expected": {"status": "rejected", "reason": "allocation-mask-expansion", "state_unchanged": true}
+    },
+    {
+      "id": "tlsu-descriptor-mismatch-atomic",
+      "operation": "TLSU",
+      "precondition": {"allocation_mask": "0b0101", "initialized_mask": "0b0101"},
+      "input": {"shared_tid": 0, "pe_mask": "0b0101", "tsize_code": 2, "descriptors": {"0": {"rows": 8, "cols": 8}, "2": {"rows": 8, "cols": 8}}},
+      "expected": {"status": "rejected", "reason": "descriptor-mismatch", "state_unchanged": true}
+    },
+    {
+      "id": "tlsu-payload-mismatch-atomic",
+      "operation": "TLSU",
+      "precondition": {"allocation_mask": "0b0101", "initialized_mask": "0b0101"},
+      "input": {"shared_tid": 0, "pe_mask": "0b0101", "tsize_code": 2, "payload_bytes": {"0": 256, "2": 128}},
+      "expected": {"status": "rejected", "reason": "payload-size-mismatch", "state_unchanged": true}
+    },
+    {
+      "id": "tlsu-undefined-read",
+      "operation": "TLSU",
+      "input": {"shared_tid": 255, "pe_mask": "0b0001", "access": "read"},
+      "expected": {"status": "uninitialized", "state_unchanged": true}
+    },
+    {
+      "id": "tlsu-reset",
+      "operation": "TLSU",
+      "precondition": {"shared_tid": 0, "allocation_mask": "0b0101", "initialized_mask": "0b0101"},
+      "input": {"action": "reset"},
+      "expected": {"status": "applied", "allocation_mask": "0b0000", "initialized_mask": "0b0000"}
+    },
+    {
+      "id": "tmov-equal-mask",
+      "operation": "TMOV",
+      "input": {"source_space": "shared", "destination_space": "local", "source_mask": "0b0101", "destination_mask": "0b0101"},
+      "expected": {"status": "applied"}
+    },
+    {
+      "id": "tmov-mask-mismatch-rejected",
+      "operation": "TMOV",
+      "input": {"source_space": "shared", "destination_space": "local", "source_mask": "0b0101", "destination_mask": "0b0001"},
+      "expected": {"status": "rejected", "reason": "pe-mask-mismatch", "state_unchanged": true}
+    },
+    {
+      "id": "cube-shared-source-full-mask",
+      "operation": "CUBE",
+      "input": {"source_space": "shared", "destination_space": "local", "source_mask": "0b1111"},
+      "expected": {"status": "applied"}
+    },
+    {
+      "id": "cube-shared-destination-rejected",
+      "operation": "CUBE",
+      "input": {"source_space": "local", "destination_space": "shared", "destination_mask": "0b1111"},
+      "expected": {"status": "rejected", "reason": "shared-destination-forbidden", "state_unchanged": true}
+    },
+    {
+      "id": "tgemv-shared-rejected",
+      "operation": "TGEMV",
+      "input": {"source_space": "shared", "destination_space": "local", "source_mask": "0b1111"},
+      "expected": {"status": "rejected", "reason": "shared-operand-forbidden", "state_unchanged": true}
+    }
+  ]
+}

@@ -309,7 +309,7 @@ def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument(
         "--spec",
-        default=superproject_root / "isa/v0.57/linxisa-v0.57.json",
+        default=superproject_root / "isa/v0.58/linxisa-v0.58.json",
     )
     parser.add_argument(
         "--header",

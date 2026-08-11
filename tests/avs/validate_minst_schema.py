@@ -45,7 +45,7 @@ DEFAULT_REQUIRED_FIELDS = [
 ]
 
 VALID_LENGTHS = {16, 32, 48, 64}
-VALID_BLOCK_KINDS = {"scalar", "sys", "tma", "vpar", "vseq", "cube", "tepl"}
+VALID_BLOCK_KINDS = {"scalar", "sys", "tlsu", "vpar", "vseq", "cube", "tepl"}
 VALID_OPCODE_CLASSES = {"invalid", "nop", "int", "fp", "branch", "load", "store", "atomic", "system"}
 VALID_LIFECYCLES = {"allocated", "in_flight", "retired", "flushed", "traced"}
 
