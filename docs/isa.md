@@ -2,10 +2,10 @@
 
 ## Scope
 
-`linx-model` ships a committed generated LinxISA 0.57.1 codec for `isa::Minst`.
+`linx-model` ships a committed generated LinxISA 0.58.0 codec for `isa::Minst`.
 The source of truth is:
 
-- `isa/v0.57/linxisa-v0.57.json` from the LinxISA 0.57.1 projection, generated
+- `isa/v0.58/linxisa-v0.58.json` from the LinxISA 0.58.0 projection, generated
   from the locked PTO-ISA/pto-spec release
 
 The generated C++ tables are committed under:
@@ -48,8 +48,22 @@ Decoder behavior:
 - chooses the unique most-specific form by fixed-bit count
 - validates field constraints
 - populates `Minst` metadata and typed views
-- exposes exactly 761 current LinxISA forms and rejects retired `B.ARG`,
-  `BSTART.FIXP`, and generic `BSTART.CUBE`/`BSTART.TMA` spellings
+- exposes exactly 766 current LinxISA forms and rejects retired `B.ARG`,
+  `C.B.IOS`, `BSTART.FIXP`, and generic `BSTART.CUBE`/`BSTART.TMA` spellings
+
+## PTO 0.58 Shared state
+
+`emulator::SharedTileBank` models one core-private `S0..S255` bank. Its
+destination write path preflights every selected PE before applying one atomic
+descriptor-and-payload update. The first write fixes the allocation mask and
+per-PE capacity; later subset writes are legal, while allocation expansion or
+descriptor drift fails without partial effects. A zero PE mask is a strict
+no-op, and uninitialized reads return no value without changing state.
+
+The machine-readable differential contract is committed at
+`tests/fixtures/pto_v058_shared_state.json`. It fixes the TLSU state
+transitions plus the TMOV, cooperative CUBE, and TGEMV Shared-operand policy so
+QEMU, LinxCoreModel, and RTL validation can consume the same cases.
 
 Encoder behavior:
 

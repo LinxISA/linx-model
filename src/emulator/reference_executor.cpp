@@ -95,8 +95,8 @@ std::string ResolveBlockKind(const isa::Minst &inst, const LinxState &state) {
       inst.mnemonic == "BSTART.TMOV" || inst.mnemonic == "BSTART.TPREFETCH" ||
       inst.mnemonic == "BSTART.MGATHER" || inst.mnemonic == "BSTART.MSCATTER" ||
       inst.mnemonic == "BSTART.MGATHER.MASK" || inst.mnemonic == "BSTART.MSCATTER.MASK" ||
-      inst.mnemonic == "BSTART.MGATHER.CAS") {
-    return "tma";
+      inst.mnemonic == "BSTART.MGATHER.CAS" || inst.mnemonic == "BSTART.GMOV") {
+    return "tlsu";
   }
   if (inst.mnemonic == "SSRSET" || inst.mnemonic == "HL.SSRSET") {
     return "sys";
@@ -110,10 +110,10 @@ int ResolveLaneId(std::string_view block_kind) {
 
 bool IsTileHeader(const isa::Minst &inst) {
   const auto block_kind = ResolveBlockKind(inst, LinxState{});
-  return block_kind == "tma" || block_kind == "cube" || block_kind == "tepl";
+  return block_kind == "tlsu" || block_kind == "cube" || block_kind == "tepl";
 }
 
-bool IsUnsupportedV057Scalar(const isa::Minst &inst) {
+bool IsUnsupportedScalar(const isa::Minst &inst) {
   return inst.mnemonic == "CASB" || inst.mnemonic == "CASH" || inst.mnemonic == "CASW" ||
          inst.mnemonic == "CASD" || inst.mnemonic == "DMA";
 }
@@ -332,14 +332,14 @@ void ReferenceExecutor::Execute(isa::Minst &inst) {
     state.pc = inst.next_pc;
   } else if (IsTileHeader(inst) || inst.mnemonic == "B.TEXT") {
     const auto header_block_kind =
-        inst.mnemonic == "B.TEXT" ? std::string("tma") : current_block_kind;
+        inst.mnemonic == "B.TEXT" ? std::string("tlsu") : current_block_kind;
     state.block_kind = header_block_kind;
     state.pc = inst.next_pc;
     commit_record.block_kind[0] = 0;
     std::strncpy(commit_record.block_kind, header_block_kind.c_str(),
                  sizeof(commit_record.block_kind) - 1U);
-  } else if (IsUnsupportedV057Scalar(inst)) {
-    inst.annotation = "0.57.1 scalar AMO decoded; reference executor semantics are not implemented";
+  } else if (IsUnsupportedScalar(inst)) {
+    inst.annotation = "scalar AMO decoded; reference executor semantics are not implemented";
     state.pc = inst.next_pc;
     ctx.RequestTerminate(1, std::string("unsupported_instruction:") + std::string(inst.mnemonic));
   } else {
