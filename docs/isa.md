@@ -58,7 +58,8 @@ destination write path preflights every selected PE before applying one atomic
 descriptor-and-payload update. The first write fixes the allocation mask and
 per-PE capacity; later subset writes are legal, while allocation expansion or
 descriptor drift fails without partial effects. A zero PE mask is a strict
-no-op, and uninitialized reads return no value without changing state.
+no-op, and uninitialized reads return no value without changing state. PE-mask
+bits are architectural-order: bit 3 selects PE0 through bit 0 selecting PE3.
 
 The machine-readable differential contract is committed at
 `tests/fixtures/pto_v058_shared_state.json`. It fixes the TLSU state

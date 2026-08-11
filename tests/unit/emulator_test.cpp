@@ -69,7 +69,7 @@ int TestStateReset() {
   return 0;
 }
 
-int TestV058SharedTileState() {
+int TestSharedTileState() {
   SharedTileBank bank;
   const SharedTileDescriptor descriptor{
       .dtype = 3,
@@ -100,40 +100,40 @@ int TestV058SharedTileState() {
       bank.Version(7).allocation_mask != 0 || bank.Version(7).initialized_mask != 0) {
     return 31;
   }
-  if (bank.Write(7, 0x3, 1, descriptors, payloads) != SharedTileWriteStatus::Applied ||
-      bank.Version(7).allocation_mask != 0x3 || bank.Version(7).initialized_mask != 0x3 ||
+  if (bank.Write(7, 0xc, 1, descriptors, payloads) != SharedTileWriteStatus::Applied ||
+      bank.Version(7).allocation_mask != 0xc || bank.Version(7).initialized_mask != 0xc ||
       bank.Version(7).allocated_bytes != 256 || bank.Read(7, 1)->descriptor.valid_rows != 2) {
     return 32;
   }
-  if (bank.Read(7, 2) != nullptr || bank.Version(7).initialized_mask != 0x3) {
+  if (bank.Read(7, 2) != nullptr || bank.Version(7).initialized_mask != 0xc) {
     return 33;
   }
 
   const auto lane1_before = bank.Read(7, 1)->data;
   payloads[0].assign(128, 0x44);
-  if (bank.Write(7, 0x1, 1, descriptor, payloads) != SharedTileWriteStatus::Applied ||
+  if (bank.Write(7, 0x8, 1, descriptor, payloads) != SharedTileWriteStatus::Applied ||
       bank.Read(7, 0)->data.front() != 0x44 || bank.Read(7, 1)->data != lane1_before ||
-      bank.Version(7).allocation_mask != 0x3) {
+      bank.Version(7).allocation_mask != 0xc) {
     return 34;
   }
 
   const auto lane0_before = bank.Read(7, 0)->data;
   payloads[0].assign(128, 0x66);
   payloads[1].assign(1, 0x77);
-  if (bank.Write(7, 0x3, 1, descriptors, payloads) != SharedTileWriteStatus::PayloadSizeMismatch ||
+  if (bank.Write(7, 0xc, 1, descriptors, payloads) != SharedTileWriteStatus::PayloadSizeMismatch ||
       bank.Read(7, 0)->data != lane0_before || bank.Read(7, 1)->data != lane1_before) {
     return 35;
   }
 
   payloads[1].assign(128, 0x22);
   payloads[2].assign(128, 0x55);
-  if (bank.Write(7, 0x4, 1, descriptor, payloads) != SharedTileWriteStatus::AllocationExpansion ||
-      bank.Version(7).allocation_mask != 0x3 || bank.Read(7, 2) != nullptr) {
+  if (bank.Write(7, 0x2, 1, descriptor, payloads) != SharedTileWriteStatus::AllocationExpansion ||
+      bank.Version(7).allocation_mask != 0xc || bank.Read(7, 2) != nullptr) {
     return 36;
   }
   auto mismatched = descriptor;
   mismatched.dtype = 9;
-  if (bank.Write(7, 0x1, 1, mismatched, payloads) != SharedTileWriteStatus::DescriptorMismatch ||
+  if (bank.Write(7, 0x8, 1, mismatched, payloads) != SharedTileWriteStatus::DescriptorMismatch ||
       bank.Read(7, 0)->descriptor.dtype != 3 || bank.Read(7, 0)->data.front() != 0x44) {
     return 37;
   }
@@ -145,7 +145,7 @@ int TestV058SharedTileState() {
   return 0;
 }
 
-int TestV058BindingPolicy() {
+int TestSharedTileBindingPolicy() {
   if (!linx::model::emulator::BindingAllows(TileBindingKind::Bior,
                                             TileOperandSpace::ScalarAddress) ||
       linx::model::emulator::BindingAllows(TileBindingKind::Bior, TileOperandSpace::Local) ||
@@ -173,7 +173,7 @@ int TestV058BindingPolicy() {
   return 0;
 }
 
-int TestV058BiosDecode() {
+int TestSharedTileBindingDecode() {
   Minst inst;
   if (DecodeMinstPacked(0x00001013ULL, 32, inst) != MinstCodecStatus::Ok ||
       inst.mnemonic != "B.IOS" || inst.form_id != "11ff57a2e635") {
@@ -201,7 +201,7 @@ int TestV058BiosDecode() {
   return 0;
 }
 
-int TestV058TileHeadersAndUnsupportedScalar() {
+int TestTileHeadersAndUnsupportedScalar() {
   {
     const auto bytes = EncodedBytes(BuildZeroInst("3c9e83c5a42f")); // BSTART.TPREFETCH
     if (bytes.empty()) {
@@ -429,13 +429,13 @@ int main() {
   if (const int rc = TestStateReset(); rc != 0) {
     return rc;
   }
-  if (const int rc = TestV058SharedTileState(); rc != 0) {
+  if (const int rc = TestSharedTileState(); rc != 0) {
     return rc;
   }
-  if (const int rc = TestV058BindingPolicy(); rc != 0) {
+  if (const int rc = TestSharedTileBindingPolicy(); rc != 0) {
     return rc;
   }
-  if (const int rc = TestV058BiosDecode(); rc != 0) {
+  if (const int rc = TestSharedTileBindingDecode(); rc != 0) {
     return rc;
   }
   if (const int rc = TestMinstRecordAdapter(); rc != 0) {
@@ -456,7 +456,7 @@ int main() {
   if (const int rc = TestMinstRecordDumpFormatting(); rc != 0) {
     return rc;
   }
-  if (const int rc = TestV058TileHeadersAndUnsupportedScalar(); rc != 0) {
+  if (const int rc = TestTileHeadersAndUnsupportedScalar(); rc != 0) {
     return rc;
   }
   return 0;

@@ -45,6 +45,10 @@ def main() -> int:
     _require(fixture.get("schema") == "linx-pto-v058-shared-state-v1", "unexpected schema")
     _require(fixture.get("pto_isa_release") == "0.58.0", "fixture must target PTO ISA 0.58.0")
     _require(fixture.get("pe_count") == 4, "fixture must use the architectural four-PE Core")
+    _require(
+        fixture.get("pe_mask_bits") == {"3": "PE0", "2": "PE1", "1": "PE2", "0": "PE3"},
+        "PE mask must map bit3=PE0 through bit0=PE3",
+    )
     _require(fixture.get("shared_tile_ids") == [0, 255], "fixture must cover S0..S255")
     _require(fixture.get("tsize_bytes_per_pe") == EXPECTED_SIZE_BYTES, "TSize table drifted")
 
