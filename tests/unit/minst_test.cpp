@@ -255,7 +255,7 @@ int RunCoverageRoundTripSmoke() {
   return 0;
 }
 
-int RunV058DeltaDecodeSmoke() {
+int RunActiveDeltaDecodeSmoke() {
   struct ExpectedForm {
     std::string_view uid;
     std::string_view mnemonic;
@@ -313,7 +313,7 @@ int RunV058DeltaDecodeSmoke() {
   return 0;
 }
 
-int RunV058TeplSelectorSmoke() {
+int RunTeplSelectorSmoke() {
   const auto *form = LookupFormByUid("f0754cf51a8d");
   if (form == nullptr || form->mnemonic != "BSTART.TEPL") {
     return 70;
@@ -500,14 +500,14 @@ int main() {
     std::cerr << "RunAsmTemplateReplacementSmoke failed with code " << asm_replace << '\n';
     return 6;
   }
-  const auto v058_delta = RunV058DeltaDecodeSmoke();
-  if (v058_delta != 0) {
-    std::cerr << "RunV058DeltaDecodeSmoke failed with code " << v058_delta << '\n';
+  const auto active_delta = RunActiveDeltaDecodeSmoke();
+  if (active_delta != 0) {
+    std::cerr << "RunActiveDeltaDecodeSmoke failed with code " << active_delta << '\n';
     return 7;
   }
-  const auto v058_tepl = RunV058TeplSelectorSmoke();
-  if (v058_tepl != 0) {
-    std::cerr << "RunV058TeplSelectorSmoke failed with code " << v058_tepl << '\n';
+  const auto tepl_selector = RunTeplSelectorSmoke();
+  if (tepl_selector != 0) {
+    std::cerr << "RunTeplSelectorSmoke failed with code " << tepl_selector << '\n';
     return 8;
   }
   return 0;

@@ -9,6 +9,10 @@ namespace {
 
 constexpr std::uint8_t kValidPeMask = (1U << kLinxCorePeCount) - 1U;
 
+constexpr std::uint8_t PeMaskBit(std::size_t pe) noexcept {
+  return static_cast<std::uint8_t>(1U << (kLinxCorePeCount - 1U - pe));
+}
+
 bool DescriptorValid(const SharedTileDescriptor &descriptor, std::uint32_t capacity) noexcept {
   if (descriptor.rows == 0 || descriptor.cols == 0 || descriptor.valid_rows > descriptor.rows ||
       descriptor.valid_cols > descriptor.cols) {
@@ -60,7 +64,7 @@ SharedTileBank::Write(std::uint16_t shared_id, std::uint8_t pe_mask, std::uint8_
   }
 
   for (std::size_t pe = 0; pe < kLinxCorePeCount; ++pe) {
-    const auto bit = static_cast<std::uint8_t>(1U << pe);
+    const auto bit = PeMaskBit(pe);
     if ((pe_mask & bit) == 0U) {
       continue;
     }
@@ -84,7 +88,7 @@ SharedTileBank::Write(std::uint16_t shared_id, std::uint8_t pe_mask, std::uint8_
     version.per_pe_capacity = *capacity;
     version.allocated_bytes = *capacity * static_cast<std::uint32_t>(std::popcount(pe_mask));
     for (std::size_t pe = 0; pe < kLinxCorePeCount; ++pe) {
-      if ((pe_mask & static_cast<std::uint8_t>(1U << pe)) != 0U) {
+      if ((pe_mask & PeMaskBit(pe)) != 0U) {
         version.dtype = descriptors[pe].dtype;
         break;
       }
@@ -92,7 +96,7 @@ SharedTileBank::Write(std::uint16_t shared_id, std::uint8_t pe_mask, std::uint8_
   }
 
   for (std::size_t pe = 0; pe < kLinxCorePeCount; ++pe) {
-    const auto bit = static_cast<std::uint8_t>(1U << pe);
+    const auto bit = PeMaskBit(pe);
     if ((pe_mask & bit) == 0U) {
       continue;
     }
@@ -109,7 +113,7 @@ const SharedTileLane *SharedTileBank::Read(std::uint16_t shared_id,
     return nullptr;
   }
   const auto &version = versions_[shared_id];
-  if ((version.initialized_mask & static_cast<std::uint8_t>(1U << pe_id)) == 0U) {
+  if ((version.initialized_mask & PeMaskBit(pe_id)) == 0U) {
     return nullptr;
   }
   return &version.lanes[pe_id];
