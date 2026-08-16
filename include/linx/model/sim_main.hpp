@@ -22,6 +22,9 @@ namespace linx::model {
 struct SimMainArgs {
   std::string engine = "ref";
   std::optional<std::string> emit_trace_path;
+  std::optional<std::string> result_dump_path;
+  std::optional<std::uint64_t> result_address;
+  std::optional<std::uint64_t> result_size;
   std::optional<std::uint64_t> stop_pc;
   std::optional<std::uint64_t> max_cycles;
   std::size_t compare_window = 128;

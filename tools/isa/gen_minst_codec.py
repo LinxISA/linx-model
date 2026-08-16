@@ -119,6 +119,14 @@ def build_forms(spec: dict) -> tuple[list[dict], list[dict], list[dict], list[di
     constraints = []
 
     for inst in spec.get("instructions", []):
+        source_form_id = str(inst.get("pto_source_form_id", ""))
+        source_uid = source_form_id.rsplit("_", 1)[-1]
+        trace_uid = (
+            source_uid
+            if len(source_uid) == 12
+            and all(character in "0123456789abcdef" for character in source_uid)
+            else str(inst.get("uid", ""))
+        )
         encoding = inst.get("encoding") or {}
         parts = list(encoding.get("parts") or [])
         offsets = []
@@ -207,7 +215,7 @@ def build_forms(spec: dict) -> tuple[list[dict], list[dict], list[dict], list[di
 
         forms.append(
             {
-                "uid": str(inst.get("uid", "")),
+                "uid": trace_uid,
                 "mnemonic": str(inst.get("mnemonic", "")),
                 "asm_template": str(inst.get("asm", "") or ""),
                 "encoding_kind": str(inst.get("encoding_kind", "") or ""),

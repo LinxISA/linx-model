@@ -73,6 +73,8 @@ public:
   [[nodiscard]] std::optional<std::uint16_t> Read16(std::uint64_t addr) const;
   [[nodiscard]] std::optional<std::uint32_t> Read32(std::uint64_t addr) const;
   [[nodiscard]] std::optional<std::uint64_t> Read64(std::uint64_t addr) const;
+  [[nodiscard]] std::optional<std::vector<std::uint8_t>> ReadMemoryRange(std::uint64_t addr,
+                                                                         std::size_t size) const;
   void Write8(std::uint64_t addr, std::uint8_t value);
   void Write32(std::uint64_t addr, std::uint32_t value);
   void Write64(std::uint64_t addr, std::uint64_t value);

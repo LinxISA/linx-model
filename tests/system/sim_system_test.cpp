@@ -197,6 +197,29 @@ int RunArgParseSmoke() {
   return 0;
 }
 
+int RunResultDumpArgParseSmoke() {
+  std::ostringstream out;
+  std::ostringstream err;
+  int exit_code = -1;
+  const char *argv[] = {
+      "linx-model",
+      "--result-dump",
+      "/tmp/result.bin",
+      "--result-address",
+      "0x20000",
+      "--result-size",
+      "12",
+  };
+  const auto parsed = linx::model::detail::ParseSimMainArgs(
+      static_cast<int>(std::size(argv)), const_cast<char **>(argv), out, err, exit_code);
+  if (!parsed.has_value() || exit_code != 0 || !err.str().empty() ||
+      parsed->result_dump_path != "/tmp/result.bin" || parsed->result_address != 0x20000 ||
+      parsed->result_size != 12) {
+    return 10;
+  }
+  return 0;
+}
+
 std::vector<std::uint8_t> EncodeAddBytes() {
   const auto *form = linx::model::isa::LookupFormByMnemonic("ADD");
   if (form == nullptr) {
@@ -379,6 +402,9 @@ int main() {
   }
   if (RunArgParseSmoke() != 0) {
     return 2;
+  }
+  if (RunResultDumpArgParseSmoke() != 0) {
+    return 6;
   }
   if (RunInnerQueueSmoke() != 0) {
     return 3;

@@ -1,6 +1,7 @@
 #include "linx/model/emulator/execution_context.hpp"
 
 #include <filesystem>
+#include <limits>
 
 #include "linx/model/sim_assert.hpp"
 
@@ -146,6 +147,23 @@ std::optional<std::uint64_t> ExecutionContext::Read64(std::uint64_t addr) const 
     value |= static_cast<std::uint64_t>(*byte) << (idx * 8U);
   }
   return value;
+}
+
+std::optional<std::vector<std::uint8_t>> ExecutionContext::ReadMemoryRange(std::uint64_t addr,
+                                                                           std::size_t size) const {
+  if (size > 0 && size - 1U > std::numeric_limits<std::uint64_t>::max() - addr) {
+    return std::nullopt;
+  }
+  std::vector<std::uint8_t> bytes;
+  bytes.reserve(size);
+  for (std::size_t index = 0; index < size; ++index) {
+    const auto byte = Read8(addr + index);
+    if (!byte.has_value()) {
+      return std::nullopt;
+    }
+    bytes.push_back(*byte);
+  }
+  return bytes;
 }
 
 void ExecutionContext::Write8(std::uint64_t addr, std::uint8_t value) {
