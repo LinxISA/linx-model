@@ -145,6 +145,12 @@ add_test(
     ${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/pto_v058_shared_state.json)
 set_tests_properties(linx_model_check_pto_v058_shared_fixture PROPERTIES LABELS "checks")
 add_test(
+  NAME linx_model_check_diff_runner
+  COMMAND
+    ${Python3_EXECUTABLE}
+    ${CMAKE_CURRENT_SOURCE_DIR}/tests/avs/test_run_model_diff_suite.py)
+set_tests_properties(linx_model_check_diff_runner PROPERTIES LABELS "checks")
+add_test(
   NAME linx_model_check_gen_minst_codec
   COMMAND
     ${Python3_EXECUTABLE}

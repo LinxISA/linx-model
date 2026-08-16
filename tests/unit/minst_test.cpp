@@ -263,17 +263,17 @@ int RunActiveDeltaDecodeSmoke() {
   };
 
   constexpr std::array<ExpectedForm, 11> kExpectedForms = {{
-      {"3c9e83c5a42f", "BSTART.TPREFETCH", MinstOpcodeClass::System},
-      {"c53a0033eb26", "BSTART.MGATHER.MASK", MinstOpcodeClass::System},
-      {"6037e1cd885f", "BSTART.MSCATTER.MASK", MinstOpcodeClass::System},
-      {"74d282c28e52", "BSTART.MGATHER.CAS", MinstOpcodeClass::System},
-      {"11ff57a2e635", "B.IOS", MinstOpcodeClass::System},
-      {"84944b9c3d19", "B.IOT", MinstOpcodeClass::System},
-      {"5793d27aa023", "BSTART.TGEMV", MinstOpcodeClass::System},
-      {"5b20d174f5d9", "BSTART.TMATMULMX.BIAS", MinstOpcodeClass::System},
-      {"60f1b44a0423", "CASB", MinstOpcodeClass::Atomic},
-      {"952d49f5a0e8", "CASD", MinstOpcodeClass::Atomic},
-      {"d287b8b83b11", "DMA", MinstOpcodeClass::Atomic},
+      {"d5f83e5aadf6", "BSTART.TPREFETCH", MinstOpcodeClass::System},
+      {"5573241cd944", "BSTART.MGATHER.MASK", MinstOpcodeClass::System},
+      {"2a33eed646f7", "BSTART.MSCATTER.MASK", MinstOpcodeClass::System},
+      {"fd8c8a3b720a", "BSTART.MGATHER.CAS", MinstOpcodeClass::System},
+      {"4ba5ef98fdaa", "B.IOS", MinstOpcodeClass::System},
+      {"8b8bce6bffe8", "B.IOT", MinstOpcodeClass::System},
+      {"ae19f5b678f5", "BSTART.TGEMV", MinstOpcodeClass::System},
+      {"098c7efa51b0", "BSTART.TMATMULMX.BIAS", MinstOpcodeClass::System},
+      {"7e529b871832", "CASB", MinstOpcodeClass::Atomic},
+      {"5852c57277a6", "CASD", MinstOpcodeClass::Atomic},
+      {"a168aeca5fa5", "DMA", MinstOpcodeClass::Atomic},
   }};
 
   for (const auto &expected : kExpectedForms) {
@@ -314,7 +314,7 @@ int RunActiveDeltaDecodeSmoke() {
 }
 
 int RunTeplSelectorSmoke() {
-  const auto *form = LookupFormByUid("f0754cf51a8d");
+  const auto *form = LookupFormByUid("d022db6dacb3");
   if (form == nullptr || form->mnemonic != "BSTART.TEPL") {
     return 70;
   }

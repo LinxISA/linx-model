@@ -20,6 +20,10 @@ void PrintUsage(std::ostream &os, const char *program) {
      << "  --raw-base <addr>   Base address for raw non-ELF binaries\n"
      << "  --emit-minst-trace <path>\n"
      << "                      Emit Minst-native JSONL trace records\n"
+     << "  --result-dump <path>\n"
+     << "  --result-address <addr>\n"
+     << "  --result-size <bytes>\n"
+     << "                      Export architecture-visible result memory\n"
      << "  --disasm            Print program disassembly before simulation\n"
      << "  --disasm-only       Print program disassembly and exit\n"
      << "  --compare-window <n> Buffered compare window size (default 128)\n"
@@ -123,6 +127,37 @@ std::optional<SimMainArgs> ParseSimMainArgs(int argc, char **argv, std::ostream 
       continue;
     }
 
+    if (Matches(arg, "--result-dump")) {
+      if (i + 1 >= argc) {
+        err << "missing value for --result-dump\n";
+        exit_code = 1;
+        return std::nullopt;
+      }
+      args.result_dump_path = std::string(argv[++i]);
+      continue;
+    }
+
+    if (Matches(arg, "--result-address") || Matches(arg, "--result-size")) {
+      if (i + 1 >= argc) {
+        err << "missing value for " << arg << '\n';
+        exit_code = 1;
+        return std::nullopt;
+      }
+      try {
+        const auto value = ParseUnsignedArg(argv[++i]);
+        if (Matches(arg, "--result-address")) {
+          args.result_address = value;
+        } else {
+          args.result_size = value;
+        }
+      } catch (const std::exception &) {
+        err << "invalid integer for " << arg << ": " << argv[i] << '\n';
+        exit_code = 1;
+        return std::nullopt;
+      }
+      continue;
+    }
+
     if (Matches(arg, "--max-cycles")) {
       if (i + 1 >= argc) {
         err << "missing value for --max-cycles\n";
@@ -202,6 +237,20 @@ std::optional<SimMainArgs> ParseSimMainArgs(int argc, char **argv, std::ostream 
     }
 
     err << "unknown option: " << arg << '\n';
+    exit_code = 1;
+    return std::nullopt;
+  }
+
+  const unsigned result_option_count = static_cast<unsigned>(args.result_dump_path.has_value()) +
+                                       static_cast<unsigned>(args.result_address.has_value()) +
+                                       static_cast<unsigned>(args.result_size.has_value());
+  if (result_option_count != 0U && result_option_count != 3U) {
+    err << "--result-dump, --result-address, and --result-size must be specified together\n";
+    exit_code = 1;
+    return std::nullopt;
+  }
+  if (args.result_size == 0) {
+    err << "--result-size must be greater than zero\n";
     exit_code = 1;
     return std::nullopt;
   }

@@ -24,6 +24,28 @@ def _run(cmd: list[str], *, env: dict[str, str] | None = None, cwd: Path | None 
     )
 
 
+def _run_with_fresh_output(
+    cmd: list[str],
+    output: Path,
+    *,
+    consumer: str,
+    env: dict[str, str] | None = None,
+    cwd: Path | None = None,
+) -> subprocess.CompletedProcess[str]:
+    if output.exists():
+        if not output.is_file():
+            raise SystemExit(
+                f"error: {consumer} result output is not a removable file: {output}"
+            )
+        output.unlink()
+    result = _run(cmd, env=env, cwd=cwd)
+    if result.returncode == 0 and not output.is_file():
+        raise SystemExit(
+            f"error: {consumer} did not create fresh result memory: {output}"
+        )
+    return result
+
+
 def _load_suite(path: Path) -> dict[str, Any]:
     import yaml  # type: ignore
 
@@ -35,6 +57,12 @@ def _load_suite(path: Path) -> dict[str, Any]:
 
 def _default_bin(root: Path, rel: str) -> Path:
     return root / rel
+
+
+def _selected_cases(cases: list[dict[str, Any]], profile: str) -> list[dict[str, Any]]:
+    if not profile:
+        return cases
+    return [case for case in cases if profile in case.get("required_in_profile", [])]
 
 
 def _sha256(path: Path) -> str:
@@ -53,6 +81,41 @@ def _capture_artifacts(paths: dict[str, Path]) -> dict[str, dict[str, str]]:
             raise SystemExit(f"error: provenance artifact {name} is missing: {resolved}")
         artifacts[name] = {"path": str(resolved), "sha256": _sha256(resolved)}
     return artifacts
+
+
+def _git_identity(path: Path) -> dict[str, Any]:
+    resolved = path.resolve()
+    commit = _run(["git", "-C", str(resolved), "rev-parse", "HEAD"])
+    tree = _run(["git", "-C", str(resolved), "rev-parse", "HEAD^{tree}"])
+    if commit.returncode != 0 or tree.returncode != 0:
+        raise SystemExit(f"error: cannot authenticate Git component: {resolved}")
+    status = _run(
+        ["git", "-C", str(resolved), "status", "--porcelain", "--untracked-files=no"]
+    )
+    if status.returncode != 0 or status.stdout.strip():
+        raise SystemExit(f"error: Git component is not clean: {resolved}")
+    return {
+        "path": str(resolved),
+        "commit": commit.stdout.strip(),
+        "tree": tree.stdout.strip(),
+        "clean": True,
+    }
+
+
+def _capture_components(root: Path) -> dict[str, dict[str, Any]]:
+    return {
+        "compiler": _git_identity(root / "compiler/llvm"),
+        "model": _git_identity(root / "tools/model"),
+        "qemu": _git_identity(root / "emulator/qemu"),
+    }
+
+
+def _verify_components(components: dict[str, dict[str, Any]], consumer: str) -> None:
+    for name, expected in sorted(components.items()):
+        if _git_identity(Path(expected["path"])) != expected:
+            raise SystemExit(
+                f"error: component {name} identity changed before {consumer}"
+            )
 
 
 def _verify_artifacts(artifacts: dict[str, dict[str, str]], consumer: str) -> None:
@@ -90,6 +153,27 @@ def _validate_trace(validator: Path, trace: Path, case: dict[str, Any]) -> subpr
     return _run(cmd)
 
 
+def _load_result_contract(root: Path, case: dict[str, Any]) -> tuple[Path, Path, int, int] | None:
+    manifest_name = case.get("result_manifest")
+    golden_name = case.get("golden")
+    if manifest_name is None and golden_name is None:
+        return None
+    if not isinstance(manifest_name, str) or not isinstance(golden_name, str):
+        raise SystemExit("error: result_manifest and golden must be specified together")
+    manifest_path = (root / manifest_name).resolve()
+    golden_path = (root / golden_name).resolve()
+    try:
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        result = manifest["result_memory"]
+        address = int(result["address"])
+        size = int(result["size"])
+    except (OSError, KeyError, TypeError, ValueError, json.JSONDecodeError) as exc:
+        raise SystemExit(f"error: invalid result manifest {manifest_path}: {exc}") from exc
+    if address <= 0 or size <= 0:
+        raise SystemExit(f"error: invalid result range in {manifest_path}")
+    return manifest_path, golden_path, address, size
+
+
 def _compile_case(root: Path, workdir: Path, case: dict[str, Any], clang: Path, clangxx: Path, llvm_mc: Path, llc: Path, lld: Path) -> Path:
     src = root / str(case["source"])
     obj = workdir / "case.o"
@@ -123,8 +207,27 @@ def _compile_case(root: Path, workdir: Path, case: dict[str, Any], clang: Path, 
         raise SystemExit(f"error: unsupported source kind {kind!r} for {src}")
     if result.returncode != 0:
         raise SystemExit(result.stdout)
-    linked = workdir / "linked.o"
-    result = _run([str(lld), "-r", "-o", str(linked), str(obj)])
+    if case.get("link_mode") == "release-executable":
+        contract = _load_result_contract(root, case)
+        if contract is None:
+            raise SystemExit("error: release-executable requires result manifest")
+        _, _, result_address, _ = contract
+        linked = workdir / "case.elf"
+        link_command = [
+            str(lld),
+            "--image-base=0",
+            "-e",
+            "_start",
+            "-Ttext=0",
+            f"--section-start=.result={result_address:#x}",
+            "-o",
+            str(linked),
+            str(obj),
+        ]
+    else:
+        linked = workdir / "linked.o"
+        link_command = [str(lld), "-r", "-o", str(linked), str(obj)]
+    result = _run(link_command)
     if result.returncode != 0:
         raise SystemExit(result.stdout)
     return linked
@@ -180,6 +283,54 @@ def _first_mismatch(ref_rows: list[dict[str, Any]], other_rows: list[dict[str, A
     return None
 
 
+def _result_row(path: Path, consumer_sha256: str) -> dict[str, Any]:
+    if not path.is_file():
+        raise SystemExit(f"error: result memory output is missing: {path}")
+    return {
+        "path": str(path.resolve()),
+        "sha256": _sha256(path),
+        "size": path.stat().st_size,
+        "consumer_sha256": consumer_sha256,
+    }
+
+
+def _comparison_evidence(
+    results: dict[str, dict[str, Any]], artifacts: dict[str, dict[str, str]]
+) -> tuple[dict[str, dict[str, Any]], dict[str, dict[str, Any]]]:
+    golden_path = Path(artifacts["golden"]["path"])
+    golden_bytes = golden_path.read_bytes()
+    golden_sha256 = artifacts["golden"]["sha256"]
+    comparisons: dict[str, dict[str, Any]] = {}
+    result_bytes: dict[str, bytes] = {}
+    for consumer, row in results.items():
+        actual = Path(row["path"]).read_bytes()
+        if actual != golden_bytes:
+            raise SystemExit(f"error: {consumer} result memory differs from independent golden")
+        result_bytes[consumer] = actual
+        comparisons[consumer] = {
+            "status": "pass",
+            "actual_sha256": row["sha256"],
+            "golden_sha256": golden_sha256,
+            "consumer_sha256": artifacts[consumer]["sha256"],
+            "size": len(actual),
+        }
+    pairwise: dict[str, dict[str, Any]] = {}
+    consumers = ("qemu", "ref", "compare")
+    for index, left in enumerate(consumers):
+        for right in consumers[index + 1 :]:
+            if result_bytes[left] != result_bytes[right]:
+                raise SystemExit(f"error: result memory differs for {left} and {right}")
+            pairwise[f"{left}:{right}"] = {
+                "status": "pass",
+                "left_sha256": results[left]["sha256"],
+                "right_sha256": results[right]["sha256"],
+                "left_consumer_sha256": artifacts[left]["sha256"],
+                "right_consumer_sha256": artifacts[right]["sha256"],
+                "size": len(result_bytes[left]),
+            }
+    return comparisons, pairwise
+
+
 def main(argv: list[str]) -> int:
     ap = argparse.ArgumentParser(description="Run tools/model differential suite")
     ap.add_argument("--root", default="")
@@ -187,6 +338,7 @@ def main(argv: list[str]) -> int:
     ap.add_argument("--workdir", default="")
     ap.add_argument("--qemu", default="")
     ap.add_argument("--qemu-bios", default="")
+    ap.add_argument("--profile", default="")
     args = ap.parse_args(argv)
 
     root = Path(args.root).resolve() if args.root else Path(__file__).resolve().parents[4]
@@ -213,31 +365,70 @@ def main(argv: list[str]) -> int:
         base = Path(tempfile.mkdtemp(prefix="linx-model-suite."))
 
     ok = True
-    summary: dict[str, Any] = {"suite": str(suite_path), "cases": []}
-    for idx, case in enumerate(suite.get("cases", [])):
+    summary: dict[str, Any] = {
+        "suite": str(suite_path),
+        "suite_sha256": _sha256(suite_path),
+        "cases": [],
+    }
+    cases = _selected_cases(list(suite.get("cases", [])), args.profile)
+    if not cases:
+        raise SystemExit(f"error: no cases selected for profile {args.profile!r}")
+    for idx, case in enumerate(cases):
         case_id = str(case["id"])
         case_dir = base / f"{idx:02d}_{case_id}"
         case_dir.mkdir(parents=True, exist_ok=True)
         obj = _compile_case(root, case_dir, case, clang, clangxx, llvm_mc, llc, lld)
         source_path = root / str(case["source"])
-        artifacts = _capture_artifacts(
-            {
-                "compiler": _case_compiler(case, source_path, clang, clangxx, llvm_mc, llc),
-                "linker": lld,
-                "elf": obj,
-                "qemu": qemu,
-                "model": cli,
-                "manifest": suite_path,
-            }
-        )
-        provenance = {"artifacts": artifacts, "verified_after_run": False}
+        result_contract = _load_result_contract(root, case)
+        artifact_paths = {
+            "compiler": _case_compiler(case, source_path, clang, clangxx, llvm_mc, llc),
+            "linker": lld,
+            "elf": obj,
+            "qemu": qemu,
+            "qemu_source_marker": qemu.parent / ".linx_qemu_clean_head",
+        }
+        if result_contract is None:
+            artifact_paths.update({"model": cli, "manifest": suite_path})
+        else:
+            manifest_path, golden_path, _, _ = result_contract
+            artifact_paths.update(
+                {"ref": cli, "compare": cli, "manifest": manifest_path, "golden": golden_path}
+            )
+        artifacts = _capture_artifacts(artifact_paths)
+        inputs = _capture_artifacts({"source": source_path, "suite": suite_path})
+        components = _capture_components(root)
+        provenance = {
+            "artifacts": artifacts,
+            "inputs": inputs,
+            "components": components,
+            "verified_after_run": False,
+        }
 
         ref_trace = case_dir / "ref.jsonl"
         ca_trace = case_dir / "ca.jsonl"
         qemu_trace = case_dir / "qemu.jsonl"
+        ref_result = case_dir / "ref.result.bin"
+        compare_result = case_dir / "compare.result.bin"
+        qemu_result = case_dir / "qemu.result.bin"
+        model_result_args: list[str] = []
+        if result_contract is not None:
+            _, _, result_address, result_size = result_contract
+            model_result_args = [
+                "--result-address",
+                str(result_address),
+                "--result-size",
+                str(result_size),
+            ]
 
         _verify_artifacts(artifacts, "reference model")
-        result = _run([str(cli), "--engine", "ref", "--bin", str(obj), "--emit-minst-trace", str(ref_trace), "--max-cycles", "512"])
+        _verify_artifacts(inputs, "reference model")
+        _verify_components(components, "reference model")
+        ref_command = [str(cli), "--engine", "ref", "--bin", str(obj), "--emit-minst-trace", str(ref_trace), "--max-cycles", "512", *model_result_args, *(["--result-dump", str(ref_result)] if result_contract is not None else [])]
+        result = (
+            _run_with_fresh_output(ref_command, ref_result, consumer="ref")
+            if result_contract is not None
+            else _run(ref_command)
+        )
         if result.returncode != 0:
             summary["cases"].append({"id": case_id, "status": "fail", "stage": "ref", "log": result.stdout, "provenance": provenance})
             ok = False
@@ -249,7 +440,14 @@ def main(argv: list[str]) -> int:
             continue
 
         _verify_artifacts(artifacts, "compare model")
-        result = _run([str(cli), "--engine", "compare", "--bin", str(obj), "--emit-minst-trace", str(ca_trace), "--max-cycles", "512"])
+        _verify_artifacts(inputs, "compare model")
+        _verify_components(components, "compare model")
+        compare_command = [str(cli), "--engine", "compare", "--bin", str(obj), "--emit-minst-trace", str(ca_trace), "--max-cycles", "512", *model_result_args, *(["--result-dump", str(compare_result)] if result_contract is not None else [])]
+        result = (
+            _run_with_fresh_output(compare_command, compare_result, consumer="compare")
+            if result_contract is not None
+            else _run(compare_command)
+        )
         if result.returncode != 0:
             summary["cases"].append({"id": case_id, "status": "fail", "stage": "compare", "log": result.stdout})
             ok = False
@@ -262,12 +460,27 @@ def main(argv: list[str]) -> int:
 
         env = dict(os.environ)
         env["LINX_MINST_TRACE"] = str(qemu_trace)
-        qemu_cmd = [str(qemu), "-nographic", "-monitor", "none", "-machine", "virt"]
+        machine = "virt"
+        if result_contract is not None:
+            _, _, result_address, result_size = result_contract
+            machine = (
+                f"virt,cross-model-dump={qemu_result},"
+                f"cross-model-address={result_address},cross-model-size={result_size}"
+            )
+        qemu_cmd = [str(qemu), "-nographic", "-monitor", "none", "-machine", machine]
         if args.qemu_bios:
             qemu_cmd.extend(["-bios", args.qemu_bios])
         qemu_cmd.extend(["-kernel", str(obj)])
         _verify_artifacts(artifacts, "qemu")
-        result = _run(qemu_cmd, env=env)
+        _verify_artifacts(inputs, "qemu")
+        _verify_components(components, "qemu")
+        result = (
+            _run_with_fresh_output(
+                qemu_cmd, qemu_result, consumer="qemu", env=env
+            )
+            if result_contract is not None
+            else _run(qemu_cmd, env=env)
+        )
         if result.returncode != 0:
             summary["cases"].append({"id": case_id, "status": "fail", "stage": "qemu", "log": result.stdout})
             ok = False
@@ -331,8 +544,31 @@ def main(argv: list[str]) -> int:
             continue
 
         _verify_artifacts(artifacts, "final verification")
+        _verify_artifacts(inputs, "final verification")
+        _verify_components(components, "final verification")
         provenance["verified_after_run"] = True
-        summary["cases"].append({"id": case_id, "status": "pass", "provenance": provenance})
+        case_summary: dict[str, Any] = {
+            "id": case_id,
+            "source": str(source_path.resolve()),
+            "source_sha256": inputs["source"]["sha256"],
+            "status": "pass",
+            "provenance": provenance,
+        }
+        if result_contract is not None:
+            result_memory = {
+                "qemu": _result_row(qemu_result, artifacts["qemu"]["sha256"]),
+                "ref": _result_row(ref_result, artifacts["ref"]["sha256"]),
+                "compare": _result_row(compare_result, artifacts["compare"]["sha256"]),
+            }
+            comparisons, pairwise = _comparison_evidence(result_memory, artifacts)
+            case_summary.update(
+                {
+                    "result_memory": result_memory,
+                    "golden_comparisons": comparisons,
+                    "pairwise_comparisons": pairwise,
+                }
+            )
+        summary["cases"].append(case_summary)
 
     print(json.dumps(summary, indent=2, sort_keys=True))
     return 0 if ok else 1

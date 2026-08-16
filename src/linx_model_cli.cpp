@@ -2,6 +2,7 @@
 
 #include <filesystem>
 #include <fstream>
+#include <limits>
 #include <memory>
 
 namespace {
@@ -18,7 +19,35 @@ using linx::model::emulator::ReferenceExecutor;
 using linx::model::emulator::WriteMinstRecordDump;
 using linx::model::emulator::WriteMinstRecordJson;
 
-int RunReferenceEngine(const SimMainArgs &args, std::ostream &out, std::ostream &) {
+int WriteResultDump(const SimMainArgs &args, const ExecutionContext &ctx, std::ostream &err) {
+  if (!args.result_dump_path.has_value()) {
+    return 0;
+  }
+  if (*args.result_size > std::numeric_limits<std::size_t>::max()) {
+    err << "result dump size exceeds host limits\n";
+    return 1;
+  }
+  const auto bytes =
+      ctx.ReadMemoryRange(*args.result_address, static_cast<std::size_t>(*args.result_size));
+  if (!bytes.has_value()) {
+    err << "result memory range is not fully mapped\n";
+    return 1;
+  }
+  const std::filesystem::path path(*args.result_dump_path);
+  if (path.has_parent_path()) {
+    std::filesystem::create_directories(path.parent_path());
+  }
+  std::ofstream output(path, std::ios::binary | std::ios::trunc);
+  output.write(reinterpret_cast<const char *>(bytes->data()),
+               static_cast<std::streamsize>(bytes->size()));
+  if (!output.good()) {
+    err << "failed to write result memory: " << path << '\n';
+    return 1;
+  }
+  return 0;
+}
+
+int RunReferenceEngine(const SimMainArgs &args, std::ostream &out, std::ostream &err) {
   auto ctx = std::make_shared<ExecutionContext>();
   auto executor = std::make_shared<ReferenceExecutor>(ctx);
   if (args.program_path.has_value()) {
@@ -35,7 +64,8 @@ int RunReferenceEngine(const SimMainArgs &args, std::ostream &out, std::ostream 
     ctx->SetTracePath(*args.emit_trace_path);
   }
   executor->Run(args.stop_pc, args.max_cycles);
-  return ctx->ExitCode();
+  const int exit_code = ctx->ExitCode();
+  return exit_code == 0 ? WriteResultDump(args, *ctx, err) : exit_code;
 }
 
 void WriteMismatchDump(const SimMainArgs &args,
@@ -127,7 +157,8 @@ int RunCompareEngine(const SimMainArgs &args, std::ostream &, std::ostream &err)
         << " ca=" << ca_sim->Context().Committed().size() << '\n';
     return 3;
   }
-  return std::max(ref_ctx->ExitCode(), ca_sim->Context().ExitCode());
+  const int exit_code = std::max(ref_ctx->ExitCode(), ca_sim->Context().ExitCode());
+  return exit_code == 0 ? WriteResultDump(args, ca_sim->Context(), err) : exit_code;
 }
 
 } // namespace
@@ -147,5 +178,6 @@ int main(int argc, char **argv) {
   }
 
   auto sim = std::make_shared<ExecutorBackedSim>();
-  return RunSimMain(*sim, *parsed);
+  const int result = RunSimMain(*sim, *parsed);
+  return result == 0 ? WriteResultDump(*parsed, sim->Context(), std::cerr) : result;
 }

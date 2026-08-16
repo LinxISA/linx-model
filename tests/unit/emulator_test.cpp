@@ -69,6 +69,17 @@ int TestStateReset() {
   return 0;
 }
 
+int TestMemoryRangeRead() {
+  ExecutionContext ctx;
+  ctx.Write32(0x20000, 0x646c6f67U);
+  const auto bytes = ctx.ReadMemoryRange(0x20000, 4);
+  if (!bytes.has_value() || *bytes != std::vector<std::uint8_t>({'g', 'o', 'l', 'd'}) ||
+      ctx.ReadMemoryRange(0x20002, 4).has_value()) {
+    return 44;
+  }
+  return 0;
+}
+
 int TestSharedTileState() {
   SharedTileBank bank;
   const SharedTileDescriptor descriptor{
@@ -176,7 +187,7 @@ int TestSharedTileBindingPolicy() {
 int TestSharedTileBindingDecode() {
   Minst inst;
   if (DecodeMinstPacked(0x00001013ULL, 32, inst) != MinstCodecStatus::Ok ||
-      inst.mnemonic != "B.IOS" || inst.form_id != "11ff57a2e635") {
+      inst.mnemonic != "B.IOS" || inst.form_id != "4ba5ef98fdaa") {
     return 40;
   }
   const std::uint64_t boundary = 0x00001013ULL | (0xffULL << 20U) | (0xfULL << 15U) | (7ULL << 9U);
@@ -203,7 +214,7 @@ int TestSharedTileBindingDecode() {
 
 int TestTileHeadersAndUnsupportedScalar() {
   {
-    const auto bytes = EncodedBytes(BuildZeroInst("3c9e83c5a42f")); // BSTART.TPREFETCH
+    const auto bytes = EncodedBytes(BuildZeroInst("d5f83e5aadf6")); // BSTART.TPREFETCH
     if (bytes.empty()) {
       return 23;
     }
@@ -219,7 +230,7 @@ int TestTileHeadersAndUnsupportedScalar() {
   }
 
   {
-    const auto bytes = EncodedBytes(BuildZeroInst("5793d27aa023")); // BSTART.TGEMV
+    const auto bytes = EncodedBytes(BuildZeroInst("ae19f5b678f5")); // BSTART.TGEMV
     if (bytes.empty()) {
       return 25;
     }
@@ -235,7 +246,7 @@ int TestTileHeadersAndUnsupportedScalar() {
   }
 
   {
-    const auto bytes = EncodedBytes(BuildZeroInst("60f1b44a0423")); // CASB
+    const auto bytes = EncodedBytes(BuildZeroInst("7e529b871832")); // CASB
     if (bytes.empty()) {
       return 27;
     }
@@ -427,6 +438,9 @@ int TestMinstRecordDumpFormatting() {
 
 int main() {
   if (const int rc = TestStateReset(); rc != 0) {
+    return rc;
+  }
+  if (const int rc = TestMemoryRangeRead(); rc != 0) {
     return rc;
   }
   if (const int rc = TestSharedTileState(); rc != 0) {

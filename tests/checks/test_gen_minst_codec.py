@@ -142,6 +142,9 @@ class GenMinstCodecTests(unittest.TestCase):
 
         forms, *_ = gen_minst_codec.build_forms(self.spec)
         by_name = {form["mnemonic"]: form for form in forms}
+        self.assertEqual(by_name["C.BSTART.STD"]["uid"], "8b40f078c14a")
+        self.assertEqual(by_name["ADDI"]["uid"], "2decd0a93a0a")
+        self.assertEqual(by_name["BSTART.TLOAD"]["uid"], "d0c18bb0ab15")
         self.assertEqual(
             (by_name["B.FPATR"]["mask"], by_name["B.FPATR"]["match"]),
             (0x7FFF, 0x2023),
