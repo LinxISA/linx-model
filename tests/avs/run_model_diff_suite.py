@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import os
 import subprocess
@@ -34,6 +35,44 @@ def _load_suite(path: Path) -> dict[str, Any]:
 
 def _default_bin(root: Path, rel: str) -> Path:
     return root / rel
+
+
+def _sha256(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as stream:
+        for chunk in iter(lambda: stream.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def _capture_artifacts(paths: dict[str, Path]) -> dict[str, dict[str, str]]:
+    artifacts: dict[str, dict[str, str]] = {}
+    for name, path in sorted(paths.items()):
+        resolved = path.resolve()
+        if not resolved.is_file():
+            raise SystemExit(f"error: provenance artifact {name} is missing: {resolved}")
+        artifacts[name] = {"path": str(resolved), "sha256": _sha256(resolved)}
+    return artifacts
+
+
+def _verify_artifacts(artifacts: dict[str, dict[str, str]], consumer: str) -> None:
+    for name, row in sorted(artifacts.items()):
+        path = Path(row["path"])
+        if not path.is_file():
+            raise SystemExit(f"error: provenance artifact {name} disappeared before {consumer}")
+        if _sha256(path) != row["sha256"]:
+            raise SystemExit(f"error: provenance artifact {name} changed before {consumer}")
+
+
+def _case_compiler(case: dict[str, Any], source: Path, clang: Path, clangxx: Path, llvm_mc: Path, llc: Path) -> Path:
+    kind = str(case.get("source_kind", "")).strip().lower() or source.suffix.lower().lstrip(".")
+    if kind in {"s", "asm"}:
+        return llvm_mc
+    if kind in {"ll", "ir"}:
+        return llc
+    if source.suffix.lower() in {".cc", ".cpp", ".cxx"}:
+        return clangxx
+    return clang
 
 
 def _validate_trace(validator: Path, trace: Path, case: dict[str, Any]) -> subprocess.CompletedProcess[str]:
@@ -180,14 +219,27 @@ def main(argv: list[str]) -> int:
         case_dir = base / f"{idx:02d}_{case_id}"
         case_dir.mkdir(parents=True, exist_ok=True)
         obj = _compile_case(root, case_dir, case, clang, clangxx, llvm_mc, llc, lld)
+        source_path = root / str(case["source"])
+        artifacts = _capture_artifacts(
+            {
+                "compiler": _case_compiler(case, source_path, clang, clangxx, llvm_mc, llc),
+                "linker": lld,
+                "elf": obj,
+                "qemu": qemu,
+                "model": cli,
+                "manifest": suite_path,
+            }
+        )
+        provenance = {"artifacts": artifacts, "verified_after_run": False}
 
         ref_trace = case_dir / "ref.jsonl"
         ca_trace = case_dir / "ca.jsonl"
         qemu_trace = case_dir / "qemu.jsonl"
 
+        _verify_artifacts(artifacts, "reference model")
         result = _run([str(cli), "--engine", "ref", "--bin", str(obj), "--emit-minst-trace", str(ref_trace), "--max-cycles", "512"])
         if result.returncode != 0:
-            summary["cases"].append({"id": case_id, "status": "fail", "stage": "ref", "log": result.stdout})
+            summary["cases"].append({"id": case_id, "status": "fail", "stage": "ref", "log": result.stdout, "provenance": provenance})
             ok = False
             continue
         result = _validate_trace(validator, ref_trace, case)
@@ -196,6 +248,7 @@ def main(argv: list[str]) -> int:
             ok = False
             continue
 
+        _verify_artifacts(artifacts, "compare model")
         result = _run([str(cli), "--engine", "compare", "--bin", str(obj), "--emit-minst-trace", str(ca_trace), "--max-cycles", "512"])
         if result.returncode != 0:
             summary["cases"].append({"id": case_id, "status": "fail", "stage": "compare", "log": result.stdout})
@@ -213,6 +266,7 @@ def main(argv: list[str]) -> int:
         if args.qemu_bios:
             qemu_cmd.extend(["-bios", args.qemu_bios])
         qemu_cmd.extend(["-kernel", str(obj)])
+        _verify_artifacts(artifacts, "qemu")
         result = _run(qemu_cmd, env=env)
         if result.returncode != 0:
             summary["cases"].append({"id": case_id, "status": "fail", "stage": "qemu", "log": result.stdout})
@@ -276,7 +330,9 @@ def main(argv: list[str]) -> int:
             ok = False
             continue
 
-        summary["cases"].append({"id": case_id, "status": "pass"})
+        _verify_artifacts(artifacts, "final verification")
+        provenance["verified_after_run"] = True
+        summary["cases"].append({"id": case_id, "status": "pass", "provenance": provenance})
 
     print(json.dumps(summary, indent=2, sort_keys=True))
     return 0 if ok else 1

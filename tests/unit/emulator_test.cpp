@@ -235,7 +235,7 @@ int TestTileHeadersAndUnsupportedScalar() {
   }
 
   {
-    const auto bytes = EncodedBytes(BuildZeroInst("7e529b871832")); // CASB
+    const auto bytes = EncodedBytes(BuildZeroInst("60f1b44a0423")); // CASB
     if (bytes.empty()) {
       return 27;
     }

@@ -41,7 +41,7 @@ Within each `Module`, `WorkSelf()` is event-driven:
 repository.
 
 - fetch allocates `MinstPtr`
-- decode fills generated LinxISA 0.58.0 form metadata and canonical decoded fields
+- decode fills generated LinxISA 0.58.1 form metadata and canonical decoded fields
 - middle pipeline stages inspect or extend typed views on the same packet
 - retire, flush, or DFX consumes and destroys the packet, or converts it to
   shared ownership only at terminal boundaries
@@ -64,6 +64,16 @@ The default CLI helpers accept:
 - `--raw-base <addr>` to set the base PC for raw binaries
 - `--disasm` to print assembly before simulation
 - `--disasm-only` to print assembly and exit
+
+## Release differential evidence
+
+Trace agreement is diagnostic only. A release-strict cross-model report must
+bind the compiler, linker, one ELF, QEMU, model binary, case manifest, and
+independent golden bytes by SHA-256 before execution and verify them again
+before every consumer and after the run. Each participating model must export
+its own architecture-visible result memory, match the independent golden data,
+and pass every available pairwise comparison. A trace-prefix-only report fails
+closed and cannot promote a release.
 
 ## Module Contract
 

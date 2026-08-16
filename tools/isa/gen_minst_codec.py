@@ -6,6 +6,40 @@ import json
 from pathlib import Path
 import shutil
 import subprocess
+import tempfile
+
+
+EXPECTED_RELEASE = "0.58.1"
+EXPECTED_ENCODING_ABI = "pto-isa-0.58.1-mode-function-v1"
+EXPECTED_ENCODING_PROJECTION_SHA256 = (
+    "89b872d6eaf0252200bc9349d49b9346e2a69d894cdcc2dcd0fd71911c1e0b8c"
+)
+EXPECTED_SOURCE_COMMIT = "c381465b2b8e457e162a4246ee58bb9a2c5b49fd"
+EXPECTED_SOURCE_TREE = "463a19db3d6ba70022f18bdbca0d4b2c6ed586e4"
+EXPECTED_CATALOGS = {
+    "command_forms": {
+        "count": 74,
+        "sha256": "300a3a57a8728e6c4770da6fff0202b372ec2830edb8dc978dc141d1c26424d0",
+    },
+    "scalar_forms": {
+        "count": 474,
+        "sha256": "9f3841d568ffa73fcb43bf4fd365d3c4dba42d27acffa7e273e0f403c0f0c602",
+    },
+    "tile_operations": {
+        "count": 109,
+        "sha256": "f163dea8be281fd67173713d373b60f95a9c3c4e558adcdf8034cc213507a1a3",
+    },
+    "extension_encoding_reservations": {
+        "count": 32,
+        "sha256": "bdb82b839b98984779d9a1394f6b308f141052ef0b520e5bedb8e87dadd883d4",
+    },
+}
+EXPECTED_CODEC_COUNTS = {
+    "forms": 765,
+    "fields": 2661,
+    "pieces": 3401,
+    "constraints": 780,
+}
 
 
 def c_string(value: str) -> str:
@@ -187,6 +221,74 @@ def build_forms(spec: dict) -> tuple[list[dict], list[dict], list[dict], list[di
     return forms, fields, pieces, constraints
 
 
+def validate_authority(spec: dict, lock: dict, release_manifest: dict) -> dict[str, int]:
+    checks = [
+        (lock.get("release") == EXPECTED_RELEASE, "release mismatch"),
+        (lock.get("encoding_abi") == EXPECTED_ENCODING_ABI, "encoding ABI mismatch"),
+        (
+            lock.get("encoding_projection_sha256") == EXPECTED_ENCODING_PROJECTION_SHA256,
+            "projection hash mismatch",
+        ),
+        (
+            (lock.get("source") or {}).get("commit") == EXPECTED_SOURCE_COMMIT,
+            "source commit mismatch",
+        ),
+        (
+            (lock.get("source") or {}).get("tree") == EXPECTED_SOURCE_TREE,
+            "source tree mismatch",
+        ),
+        (spec.get("version") == EXPECTED_RELEASE, "catalog release mismatch"),
+        (spec.get("instruction_count") == EXPECTED_CODEC_COUNTS["forms"], "form count mismatch"),
+        (release_manifest.get("version") == EXPECTED_RELEASE, "release manifest mismatch"),
+        (
+            release_manifest.get("source_lock") == "isa/v0.58/pto-spec.lock.json",
+            "release manifest source lock mismatch",
+        ),
+    ]
+    for condition, message in checks:
+        if not condition:
+            raise ValueError(message)
+
+    catalogs = lock.get("catalogs") or {}
+    for name, expected in EXPECTED_CATALOGS.items():
+        actual = catalogs.get(name) or {}
+        if actual.get("sha256") != expected["sha256"]:
+            raise ValueError(f"catalog hash mismatch: {name}")
+        if actual.get("count") != expected["count"]:
+            raise ValueError(f"catalog count mismatch: {name}")
+
+    cardinality = release_manifest.get("cardinality") or {}
+    for name, expected in (
+        ("command_forms", 74),
+        ("scalar_forms", 474),
+        ("tile_operations", 109),
+        ("extension_encoding_reservations", 32),
+    ):
+        if cardinality.get(name) != expected:
+            raise ValueError(f"release manifest count mismatch: {name}")
+
+    forms, fields, pieces, constraints = build_forms(spec)
+    counts = {
+        "forms": len(forms),
+        "fields": len(fields),
+        "pieces": len(pieces),
+        "constraints": len(constraints),
+    }
+    if counts != EXPECTED_CODEC_COUNTS:
+        raise ValueError(f"codec count mismatch: expected {EXPECTED_CODEC_COUNTS}, got {counts}")
+
+    by_name = {form["mnemonic"]: form for form in forms}
+    required_forms = {
+        "B.FPATR": (0x7FFF, 0x2023),
+        "BSTART.ICALL": (0xF83FFFFF, 0x50166001),
+    }
+    for mnemonic, (mask, match) in required_forms.items():
+        form = by_name.get(mnemonic)
+        if form is None or (form["mask"], form["match"]) != (mask, match):
+            raise ValueError(f"required form mismatch: {mnemonic}")
+    return counts
+
+
 def render_header(out_path: Path) -> None:
     text = """#pragma once
 
@@ -312,22 +414,57 @@ def main() -> int:
         default=superproject_root / "isa/v0.58/linxisa-v0.58.json",
     )
     parser.add_argument(
+        "--lock",
+        default=superproject_root / "isa/v0.58/pto-spec.lock.json",
+    )
+    parser.add_argument(
+        "--release-manifest",
+        default=superproject_root / "isa/v0.58/release_manifest.json",
+    )
+    parser.add_argument(
         "--header",
-        default="include/linx/model/isa/generated_tables.hpp",
+        default=model_root / "include/linx/model/isa/generated_tables.hpp",
     )
     parser.add_argument(
         "--source",
-        default="src/isa/generated_tables.cpp",
+        default=model_root / "src/isa/generated_tables.cpp",
+    )
+    parser.add_argument(
+        "--check",
+        action="store_true",
+        help="Fail when the committed outputs differ from freshly generated tables.",
     )
     args = parser.parse_args()
 
     spec = json.loads(Path(args.spec).read_text())
+    lock = json.loads(Path(args.lock).read_text())
+    release_manifest = json.loads(Path(args.release_manifest).read_text())
+    validate_authority(spec, lock, release_manifest)
     forms, fields, pieces, constraints = build_forms(spec)
     header = Path(args.header)
     source = Path(args.source)
-    render_header(header)
-    render_source(source, forms, fields, pieces, constraints)
-    format_generated_cpp([header, source])
+    if args.check:
+        with tempfile.TemporaryDirectory(
+            prefix=".linx-model-codec-check.", dir=model_root
+        ) as td:
+            temp_header = Path(td) / header.name
+            temp_source = Path(td) / source.name
+            render_header(temp_header)
+            render_source(temp_source, forms, fields, pieces, constraints)
+            format_generated_cpp([temp_header, temp_source])
+            stale = [
+                str(path)
+                for path, fresh in ((header, temp_header), (source, temp_source))
+                if not path.is_file() or path.read_bytes() != fresh.read_bytes()
+            ]
+            if stale:
+                raise SystemExit("error: stale generated codec: " + ", ".join(stale))
+    else:
+        header.parent.mkdir(parents=True, exist_ok=True)
+        source.parent.mkdir(parents=True, exist_ok=True)
+        render_header(header)
+        render_source(source, forms, fields, pieces, constraints)
+        format_generated_cpp([header, source])
     print(f"generated {len(forms)} forms, {len(fields)} fields, {len(pieces)} pieces, {len(constraints)} constraints")
     return 0
 

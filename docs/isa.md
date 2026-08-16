@@ -2,10 +2,10 @@
 
 ## Scope
 
-`linx-model` ships a committed generated LinxISA 0.58.0 codec for `isa::Minst`.
+`linx-model` ships a committed generated LinxISA 0.58.1 codec for `isa::Minst`.
 The source of truth is:
 
-- `isa/v0.58/linxisa-v0.58.json` from the LinxISA 0.58.0 projection, generated
+- `isa/v0.58/linxisa-v0.58.json` from the LinxISA 0.58.1 projection, generated
   from the locked PTO-ISA/pto-spec release
 
 The generated C++ tables are committed under:
@@ -48,7 +48,8 @@ Decoder behavior:
 - chooses the unique most-specific form by fixed-bit count
 - validates field constraints
 - populates `Minst` metadata and typed views
-- exposes exactly 766 current LinxISA forms and rejects retired `B.ARG`,
+- exposes exactly 765 current LinxISA forms, including `B.FPATR` and
+  `BSTART.ICALL`, and rejects retired `B.ARG`,
   `C.B.IOS`, `BSTART.FIXP`, and generic `BSTART.CUBE`/`BSTART.TMA` spellings
 
 ## PTO 0.58 Shared state
@@ -102,7 +103,13 @@ After updating the source JSON, regenerate the committed tables with:
 
 ```bash
 cmake --build build --target gen-isa-codec
+cmake --build build --target check-isa-codec
 ```
+
+The generator validates the exact root PTO ISA 0.58.1 lock identity, source
+commit/tree, catalog hashes/counts, and the generated 765/2661/3401/780
+form/field/piece/constraint cardinalities before writing. `check-isa-codec`
+also rejects stale committed output without modifying it.
 
 Then rebuild and rerun tests:
 

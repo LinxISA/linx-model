@@ -1,7 +1,18 @@
 {
   "schema": "linx-pto-v058-shared-state-v1",
-  "pto_isa_release": "0.58.0",
-  "pto_spec_commit": "8a77c9f0eab36cc41051519366ff163171f81463",
+  "pto_isa_identity": {
+    "release": "0.58.1",
+    "encoding_abi": "pto-isa-0.58.1-mode-function-v1",
+    "encoding_projection_sha256": "89b872d6eaf0252200bc9349d49b9346e2a69d894cdcc2dcd0fd71911c1e0b8c",
+    "source_commit": "c381465b2b8e457e162a4246ee58bb9a2c5b49fd",
+    "source_tree": "463a19db3d6ba70022f18bdbca0d4b2c6ed586e4",
+    "catalog_counts": {
+      "command_forms": 74,
+      "extension_encoding_reservations": 32,
+      "scalar_forms": 474,
+      "tile_operations": 109
+    }
+  },
   "pe_count": 4,
   "pe_mask_bits": {"3": "PE0", "2": "PE1", "1": "PE2", "0": "PE3"},
   "shared_tile_ids": [0, 255],
