@@ -16,6 +16,16 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 option(LINX_MODEL_ENABLE_SANITIZERS "Enable ASan, LSan, and UBSan" OFF)
 option(LINX_MODEL_BUILD_DOCS "Enable Doxygen documentation target" OFF)
+set(LINXISA_AUTHORITY_ROOT "" CACHE PATH "Exact LinxISA checkout containing ISA v0.58.1 authority")
+if(NOT LINXISA_AUTHORITY_ROOT AND
+   EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/../../isa/v0.58/linxisa-v0.58.json")
+  get_filename_component(
+    LINXISA_AUTHORITY_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/../.." ABSOLUTE)
+endif()
+set(LINXISA_AUTHORITY_ARGS)
+if(LINXISA_AUTHORITY_ROOT)
+  list(APPEND LINXISA_AUTHORITY_ARGS --authority-root "${LINXISA_AUTHORITY_ROOT}")
+endif()
 
 add_library(
   linx_model
@@ -42,11 +52,21 @@ add_library(linx::model ALIAS linx_model)
 add_custom_target(
   gen-isa-codec
   COMMAND "${CMAKE_CURRENT_SOURCE_DIR}/tools/isa/gen_minst_codec.py"
-          --spec "${CMAKE_CURRENT_SOURCE_DIR}/../../isa/v0.58/linxisa-v0.58.json"
+          ${LINXISA_AUTHORITY_ARGS}
           --header "${CMAKE_CURRENT_SOURCE_DIR}/include/linx/model/isa/generated_tables.hpp"
           --source "${CMAKE_CURRENT_SOURCE_DIR}/src/isa/generated_tables.cpp"
   WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
-  COMMENT "Regenerating committed LinxISA 0.58.0 Minst codec tables")
+  COMMENT "Regenerating committed LinxISA 0.58.1 Minst codec tables")
+
+add_custom_target(
+  check-isa-codec
+  COMMAND "${CMAKE_CURRENT_SOURCE_DIR}/tools/isa/gen_minst_codec.py"
+          ${LINXISA_AUTHORITY_ARGS}
+          --header "${CMAKE_CURRENT_SOURCE_DIR}/include/linx/model/isa/generated_tables.hpp"
+          --source "${CMAKE_CURRENT_SOURCE_DIR}/src/isa/generated_tables.cpp"
+          --check
+  WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
+  COMMENT "Checking committed LinxISA 0.58.1 Minst codec freshness")
 
 target_include_directories(
   linx_model
@@ -124,6 +144,17 @@ add_test(
     --fixture
     ${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/pto_v058_shared_state.json)
 set_tests_properties(linx_model_check_pto_v058_shared_fixture PROPERTIES LABELS "checks")
+add_test(
+  NAME linx_model_check_gen_minst_codec
+  COMMAND
+    ${Python3_EXECUTABLE}
+    ${CMAKE_CURRENT_SOURCE_DIR}/tests/checks/test_gen_minst_codec.py -v)
+set_tests_properties(linx_model_check_gen_minst_codec PROPERTIES LABELS "checks")
+if(LINXISA_AUTHORITY_ROOT)
+  set_tests_properties(
+    linx_model_check_gen_minst_codec
+    PROPERTIES ENVIRONMENT "LINXISA_AUTHORITY_ROOT=${LINXISA_AUTHORITY_ROOT}")
+endif()
 
 add_executable(linx_model_cli src/linx_model_cli.cpp)
 target_link_libraries(linx_model_cli PRIVATE linx_model)

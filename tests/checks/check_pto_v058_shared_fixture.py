@@ -23,6 +23,19 @@ REQUIRED_SCENARIOS = {
     "cube-shared-destination-rejected",
     "tgemv-shared-rejected",
 }
+EXPECTED_IDENTITY = {
+    "release": "0.58.1",
+    "encoding_abi": "pto-isa-0.58.1-mode-function-v1",
+    "encoding_projection_sha256": "89b872d6eaf0252200bc9349d49b9346e2a69d894cdcc2dcd0fd71911c1e0b8c",
+    "source_commit": "c381465b2b8e457e162a4246ee58bb9a2c5b49fd",
+    "source_tree": "463a19db3d6ba70022f18bdbca0d4b2c6ed586e4",
+    "catalog_counts": {
+        "command_forms": 74,
+        "extension_encoding_reservations": 32,
+        "scalar_forms": 474,
+        "tile_operations": 109,
+    },
+}
 
 
 def _require(condition: bool, message: str) -> None:
@@ -43,7 +56,10 @@ def main() -> int:
 
     fixture = _load(Path(args.fixture))
     _require(fixture.get("schema") == "linx-pto-v058-shared-state-v1", "unexpected schema")
-    _require(fixture.get("pto_isa_release") == "0.58.0", "fixture must target PTO ISA 0.58.0")
+    _require(
+        fixture.get("pto_isa_identity") == EXPECTED_IDENTITY,
+        "fixture must target the exact PTO ISA 0.58.1 identity",
+    )
     _require(fixture.get("pe_count") == 4, "fixture must use the architectural four-PE Core")
     _require(
         fixture.get("pe_mask_bits") == {"3": "PE0", "2": "PE1", "1": "PE2", "0": "PE3"},

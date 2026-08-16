@@ -75,12 +75,22 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - name: Check out immutable LinxISA v0.58.1 authority
+        uses: actions/checkout@v4
+        with:
+          repository: LinxISA/linx-isa
+          ref: ea54153b3351c48df306a57189ffb587801b9197
+          path: linxisa-authority
       - name: Install toolchain
-        run: sudo apt-get update && sudo apt-get install -y cmake ninja-build g++
+        run: sudo apt-get update && sudo apt-get install -y clang-format cmake ninja-build g++
       - name: Configure
-        run: cmake -S . -B build-system -G Ninja -DCMAKE_BUILD_TYPE=Debug
+        run: >
+          cmake -S . -B build-system -G Ninja -DCMAKE_BUILD_TYPE=Debug
+          -DLINXISA_AUTHORITY_ROOT=${{ github.workspace }}/linxisa-authority
       - name: Build
         run: cmake --build build-system
+      - name: Check committed codec freshness against immutable authority
+        run: cmake --build build-system --target check-isa-codec
       - name: Run system and checks tests
         run: |
           ctest --test-dir build-system --output-on-failure -L system
@@ -90,14 +100,21 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - name: Check out immutable LinxISA v0.58.1 authority
+        uses: actions/checkout@v4
+        with:
+          repository: LinxISA/linx-isa
+          ref: ea54153b3351c48df306a57189ffb587801b9197
+          path: linxisa-authority
       - name: Install toolchain
-        run: sudo apt-get update && sudo apt-get install -y cmake ninja-build clang
+        run: sudo apt-get update && sudo apt-get install -y clang-format cmake ninja-build clang
       - name: Configure
         run: >
           cmake -S . -B build-sanitize -G Ninja
           -DCMAKE_BUILD_TYPE=Debug
           -DCMAKE_CXX_COMPILER=clang++
           -DLINX_MODEL_ENABLE_SANITIZERS=ON
+          -DLINXISA_AUTHORITY_ROOT=${{ github.workspace }}/linxisa-authority
       - name: Build
         run: cmake --build build-sanitize
       - name: Run tests under sanitizers
