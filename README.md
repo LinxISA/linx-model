@@ -92,3 +92,16 @@ Generation fails closed unless the root lock matches the exact PTO ISA 0.58.1
 release, ABI, projection, source commit/tree, catalog hashes/counts, and the
 765-form codec cardinality. The freshness target regenerates into a temporary
 directory and byte-compares both committed outputs.
+
+For a standalone checkout, configure with an immutable LinxISA authority:
+
+```bash
+cmake -S . -B build -G Ninja \
+  -DLINXISA_AUTHORITY_ROOT=/path/to/linx-isa-at-ea54153b3351c48df306a57189ffb587801b9197
+cmake --build build --target check-isa-codec
+```
+
+Hosted CI checks out that exact LinxISA commit and runs the freshness target.
+The generator authenticates the complete catalog, lock, and release-manifest
+bytes before interpreting their declared identities, so same-count semantic or
+encoding mutations fail closed.

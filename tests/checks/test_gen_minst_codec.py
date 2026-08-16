@@ -4,6 +4,7 @@ from __future__ import annotations
 import copy
 import importlib.util
 import json
+import os
 import subprocess
 import sys
 import tempfile
@@ -12,7 +13,9 @@ from pathlib import Path
 
 
 MODEL_ROOT = Path(__file__).resolve().parents[2]
-SUPERPROJECT_ROOT = MODEL_ROOT.parents[1]
+SUPERPROJECT_ROOT = Path(
+    os.environ.get("LINXISA_AUTHORITY_ROOT", MODEL_ROOT.parents[1])
+).resolve()
 GENERATOR_PATH = MODEL_ROOT / "tools/isa/gen_minst_codec.py"
 
 module_spec = importlib.util.spec_from_file_location("gen_minst_codec", GENERATOR_PATH)
@@ -32,6 +35,69 @@ class GenMinstCodecTests(unittest.TestCase):
         self.release_manifest = json.loads(
             (SUPERPROJECT_ROOT / "isa/v0.58/release_manifest.json").read_text()
         )
+
+    def test_same_count_nonrequired_encoding_mutation_fails_content_authentication(self) -> None:
+        mutated = copy.deepcopy(self.spec)
+        form = next(
+            item for item in mutated["instructions"] if item["mnemonic"] == "ADDI"
+        )
+        pattern = form["encoding"]["parts"][0]["pattern"]
+        replacement = "1" if pattern[0] != "1" else "0"
+        form["encoding"]["parts"][0]["pattern"] = replacement + pattern[1:]
+        self.assertEqual(len(mutated["instructions"]), 765)
+
+        with tempfile.TemporaryDirectory() as td:
+            spec_path = Path(td) / "linxisa-v0.58.json"
+            lock_path = Path(td) / "pto-spec.lock.json"
+            manifest_path = Path(td) / "release_manifest.json"
+            spec_path.write_text(json.dumps(mutated), encoding="utf-8")
+            lock_path.write_text(
+                (SUPERPROJECT_ROOT / "isa/v0.58/pto-spec.lock.json").read_text(),
+                encoding="utf-8",
+            )
+            manifest_path.write_text(
+                (SUPERPROJECT_ROOT / "isa/v0.58/release_manifest.json").read_text(),
+                encoding="utf-8",
+            )
+
+            with self.assertRaisesRegex(ValueError, r"catalog content hash mismatch"):
+                gen_minst_codec.load_and_validate_authority(
+                    spec_path, lock_path, manifest_path
+                )
+
+    def test_explicit_authority_root_supports_standalone_freshness(self) -> None:
+        checked = subprocess.run(
+            [
+                sys.executable,
+                str(GENERATOR_PATH),
+                "--authority-root",
+                str(SUPERPROJECT_ROOT),
+                "--header",
+                str(MODEL_ROOT / "include/linx/model/isa/generated_tables.hpp"),
+                "--source",
+                str(MODEL_ROOT / "src/isa/generated_tables.cpp"),
+                "--check",
+            ],
+            text=True,
+            capture_output=True,
+        )
+        self.assertEqual(checked.returncode, 0, checked.stdout + checked.stderr)
+
+    def test_missing_standalone_authority_fails_closed(self) -> None:
+        with tempfile.TemporaryDirectory() as td:
+            checked = subprocess.run(
+                [
+                    sys.executable,
+                    str(GENERATOR_PATH),
+                    "--authority-root",
+                    str(Path(td) / "missing"),
+                    "--check",
+                ],
+                text=True,
+                capture_output=True,
+            )
+        self.assertNotEqual(checked.returncode, 0)
+        self.assertIn("authority file is missing", checked.stdout + checked.stderr)
 
     def test_exact_v0581_authority_and_codec_shape_are_accepted(self) -> None:
         counts = gen_minst_codec.validate_authority(

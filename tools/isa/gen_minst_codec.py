@@ -2,7 +2,9 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
+import os
 from pathlib import Path
 import shutil
 import subprocess
@@ -40,6 +42,11 @@ EXPECTED_CODEC_COUNTS = {
     "pieces": 3401,
     "constraints": 780,
 }
+EXPECTED_CATALOG_CONTENT_SHA256 = "c1750250ec295e690bd22c20fd7c7f350db5e1bb4ce2417493dc094d7f007878"
+EXPECTED_LOCK_CONTENT_SHA256 = "fec69d22b2757ebb8da3876b16e1d5845af188f107f06d05422af15513309dfd"
+EXPECTED_RELEASE_MANIFEST_CONTENT_SHA256 = (
+    "3f8f746b52aa14ad39c6be83d0ebf3bc260c992c4d3e932b10cef612d0217f6c"
+)
 
 
 def c_string(value: str) -> str:
@@ -289,6 +296,38 @@ def validate_authority(spec: dict, lock: dict, release_manifest: dict) -> dict[s
     return counts
 
 
+def _sha256_bytes(value: bytes) -> str:
+    return hashlib.sha256(value).hexdigest()
+
+
+def load_and_validate_authority(
+    spec_path: Path, lock_path: Path, release_manifest_path: Path
+) -> tuple[dict, dict[str, int]]:
+    paths = {
+        "catalog": Path(spec_path),
+        "lock": Path(lock_path),
+        "release manifest": Path(release_manifest_path),
+    }
+    for label, path in paths.items():
+        if not path.is_file():
+            raise ValueError(f"authority file is missing ({label}): {path}")
+    raw = {label: path.read_bytes() for label, path in paths.items()}
+    expected_hashes = {
+        "catalog": EXPECTED_CATALOG_CONTENT_SHA256,
+        "lock": EXPECTED_LOCK_CONTENT_SHA256,
+        "release manifest": EXPECTED_RELEASE_MANIFEST_CONTENT_SHA256,
+    }
+    for label, expected in expected_hashes.items():
+        actual = _sha256_bytes(raw[label])
+        if actual != expected:
+            message = "catalog content hash mismatch" if label == "catalog" else f"{label} content hash mismatch"
+            raise ValueError(f"{message}: expected {expected}, got {actual}")
+    spec = json.loads(raw["catalog"])
+    lock = json.loads(raw["lock"])
+    release_manifest = json.loads(raw["release manifest"])
+    return spec, validate_authority(spec, lock, release_manifest)
+
+
 def render_header(out_path: Path) -> None:
     text = """#pragma once
 
@@ -407,19 +446,23 @@ def format_generated_cpp(paths: list[Path]) -> None:
 
 def main() -> int:
     model_root = Path(__file__).resolve().parents[2]
-    superproject_root = model_root.parents[1]
     parser = argparse.ArgumentParser()
     parser.add_argument(
+        "--authority-root",
+        default=os.environ.get("LINXISA_AUTHORITY_ROOT", ""),
+        help="Exact LinxISA checkout containing isa/v0.58 authority files.",
+    )
+    parser.add_argument(
         "--spec",
-        default=superproject_root / "isa/v0.58/linxisa-v0.58.json",
+        default=None,
     )
     parser.add_argument(
         "--lock",
-        default=superproject_root / "isa/v0.58/pto-spec.lock.json",
+        default=None,
     )
     parser.add_argument(
         "--release-manifest",
-        default=superproject_root / "isa/v0.58/release_manifest.json",
+        default=None,
     )
     parser.add_argument(
         "--header",
@@ -436,10 +479,26 @@ def main() -> int:
     )
     args = parser.parse_args()
 
-    spec = json.loads(Path(args.spec).read_text())
-    lock = json.loads(Path(args.lock).read_text())
-    release_manifest = json.loads(Path(args.release_manifest).read_text())
-    validate_authority(spec, lock, release_manifest)
+    authority_root = Path(args.authority_root).expanduser().resolve() if args.authority_root else None
+    if authority_root is None and not all((args.spec, args.lock, args.release_manifest)):
+        candidate = model_root.parents[1]
+        if (candidate / "isa/v0.58/linxisa-v0.58.json").is_file():
+            authority_root = candidate
+    if authority_root is None and not all((args.spec, args.lock, args.release_manifest)):
+        raise SystemExit(
+            "error: authority file is missing; set --authority-root or LINXISA_AUTHORITY_ROOT"
+        )
+    spec_path = Path(args.spec) if args.spec else authority_root / "isa/v0.58/linxisa-v0.58.json"
+    lock_path = Path(args.lock) if args.lock else authority_root / "isa/v0.58/pto-spec.lock.json"
+    release_manifest_path = (
+        Path(args.release_manifest)
+        if args.release_manifest
+        else authority_root / "isa/v0.58/release_manifest.json"
+    )
+    try:
+        spec, _ = load_and_validate_authority(spec_path, lock_path, release_manifest_path)
+    except (ValueError, json.JSONDecodeError) as exc:
+        raise SystemExit(f"error: {exc}") from exc
     forms, fields, pieces, constraints = build_forms(spec)
     header = Path(args.header)
     source = Path(args.source)

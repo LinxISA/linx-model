@@ -111,6 +111,16 @@ commit/tree, catalog hashes/counts, and the generated 765/2661/3401/780
 form/field/piece/constraint cardinalities before writing. `check-isa-codec`
 also rejects stale committed output without modifying it.
 
+It additionally authenticates the complete authority bytes against the
+immutable LinxISA v0.58.1 release: compiled catalog
+`c1750250ec295e690bd22c20fd7c7f350db5e1bb4ce2417493dc094d7f007878`, PTO
+lock `fec69d22b2757ebb8da3876b16e1d5845af188f107f06d05422af15513309dfd`,
+and release manifest
+`3f8f746b52aa14ad39c6be83d0ebf3bc260c992c4d3e932b10cef612d0217f6c`.
+Standalone builds must provide that checkout through
+`LINXISA_AUTHORITY_ROOT`; missing authority is an error for generation and
+freshness checks.
+
 Then rebuild and rerun tests:
 
 ```bash

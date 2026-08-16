@@ -75,6 +75,14 @@ its own architecture-visible result memory, match the independent golden data,
 and pass every available pairwise comparison. A trace-prefix-only report fails
 closed and cannot promote a release.
 
+The strict consumer set for this model is exactly QEMU, the reference executor
+(`ref`), and the cycle-accurate comparison lane (`compare`). Promotion reopens
+and rehashes every tool, ELF, manifest, golden file, and result file; resolves
+`cross_model_result` plus the absolute `cross_model_result_size` from the ELF;
+requires the manifest and every file length to match that size; compares bytes
+itself; and verifies that comparison records bind both consumer-binary and
+result hashes. Reported `pass` fields are never accepted as proof by themselves.
+
 ## Module Contract
 
 Every queue-wired module derives from `Module<Derived, PortT>`.
