@@ -24,6 +24,28 @@ def _run(cmd: list[str], *, env: dict[str, str] | None = None, cwd: Path | None 
     )
 
 
+def _run_with_fresh_output(
+    cmd: list[str],
+    output: Path,
+    *,
+    consumer: str,
+    env: dict[str, str] | None = None,
+    cwd: Path | None = None,
+) -> subprocess.CompletedProcess[str]:
+    if output.exists():
+        if not output.is_file():
+            raise SystemExit(
+                f"error: {consumer} result output is not a removable file: {output}"
+            )
+        output.unlink()
+    result = _run(cmd, env=env, cwd=cwd)
+    if result.returncode == 0 and not output.is_file():
+        raise SystemExit(
+            f"error: {consumer} did not create fresh result memory: {output}"
+        )
+    return result
+
+
 def _load_suite(path: Path) -> dict[str, Any]:
     import yaml  # type: ignore
 
@@ -59,6 +81,41 @@ def _capture_artifacts(paths: dict[str, Path]) -> dict[str, dict[str, str]]:
             raise SystemExit(f"error: provenance artifact {name} is missing: {resolved}")
         artifacts[name] = {"path": str(resolved), "sha256": _sha256(resolved)}
     return artifacts
+
+
+def _git_identity(path: Path) -> dict[str, Any]:
+    resolved = path.resolve()
+    commit = _run(["git", "-C", str(resolved), "rev-parse", "HEAD"])
+    tree = _run(["git", "-C", str(resolved), "rev-parse", "HEAD^{tree}"])
+    if commit.returncode != 0 or tree.returncode != 0:
+        raise SystemExit(f"error: cannot authenticate Git component: {resolved}")
+    status = _run(
+        ["git", "-C", str(resolved), "status", "--porcelain", "--untracked-files=no"]
+    )
+    if status.returncode != 0 or status.stdout.strip():
+        raise SystemExit(f"error: Git component is not clean: {resolved}")
+    return {
+        "path": str(resolved),
+        "commit": commit.stdout.strip(),
+        "tree": tree.stdout.strip(),
+        "clean": True,
+    }
+
+
+def _capture_components(root: Path) -> dict[str, dict[str, Any]]:
+    return {
+        "compiler": _git_identity(root / "compiler/llvm"),
+        "model": _git_identity(root / "tools/model"),
+        "qemu": _git_identity(root / "emulator/qemu"),
+    }
+
+
+def _verify_components(components: dict[str, dict[str, Any]], consumer: str) -> None:
+    for name, expected in sorted(components.items()):
+        if _git_identity(Path(expected["path"])) != expected:
+            raise SystemExit(
+                f"error: component {name} identity changed before {consumer}"
+            )
 
 
 def _verify_artifacts(artifacts: dict[str, dict[str, str]], consumer: str) -> None:
@@ -308,7 +365,11 @@ def main(argv: list[str]) -> int:
         base = Path(tempfile.mkdtemp(prefix="linx-model-suite."))
 
     ok = True
-    summary: dict[str, Any] = {"suite": str(suite_path), "cases": []}
+    summary: dict[str, Any] = {
+        "suite": str(suite_path),
+        "suite_sha256": _sha256(suite_path),
+        "cases": [],
+    }
     cases = _selected_cases(list(suite.get("cases", [])), args.profile)
     if not cases:
         raise SystemExit(f"error: no cases selected for profile {args.profile!r}")
@@ -324,6 +385,7 @@ def main(argv: list[str]) -> int:
             "linker": lld,
             "elf": obj,
             "qemu": qemu,
+            "qemu_source_marker": qemu.parent / ".linx_qemu_clean_head",
         }
         if result_contract is None:
             artifact_paths.update({"model": cli, "manifest": suite_path})
@@ -332,10 +394,15 @@ def main(argv: list[str]) -> int:
             artifact_paths.update(
                 {"ref": cli, "compare": cli, "manifest": manifest_path, "golden": golden_path}
             )
-        artifacts = _capture_artifacts(
-            artifact_paths
-        )
-        provenance = {"artifacts": artifacts, "verified_after_run": False}
+        artifacts = _capture_artifacts(artifact_paths)
+        inputs = _capture_artifacts({"source": source_path, "suite": suite_path})
+        components = _capture_components(root)
+        provenance = {
+            "artifacts": artifacts,
+            "inputs": inputs,
+            "components": components,
+            "verified_after_run": False,
+        }
 
         ref_trace = case_dir / "ref.jsonl"
         ca_trace = case_dir / "ca.jsonl"
@@ -354,7 +421,14 @@ def main(argv: list[str]) -> int:
             ]
 
         _verify_artifacts(artifacts, "reference model")
-        result = _run([str(cli), "--engine", "ref", "--bin", str(obj), "--emit-minst-trace", str(ref_trace), "--max-cycles", "512", *model_result_args, *(["--result-dump", str(ref_result)] if result_contract is not None else [])])
+        _verify_artifacts(inputs, "reference model")
+        _verify_components(components, "reference model")
+        ref_command = [str(cli), "--engine", "ref", "--bin", str(obj), "--emit-minst-trace", str(ref_trace), "--max-cycles", "512", *model_result_args, *(["--result-dump", str(ref_result)] if result_contract is not None else [])]
+        result = (
+            _run_with_fresh_output(ref_command, ref_result, consumer="ref")
+            if result_contract is not None
+            else _run(ref_command)
+        )
         if result.returncode != 0:
             summary["cases"].append({"id": case_id, "status": "fail", "stage": "ref", "log": result.stdout, "provenance": provenance})
             ok = False
@@ -366,7 +440,14 @@ def main(argv: list[str]) -> int:
             continue
 
         _verify_artifacts(artifacts, "compare model")
-        result = _run([str(cli), "--engine", "compare", "--bin", str(obj), "--emit-minst-trace", str(ca_trace), "--max-cycles", "512", *model_result_args, *(["--result-dump", str(compare_result)] if result_contract is not None else [])])
+        _verify_artifacts(inputs, "compare model")
+        _verify_components(components, "compare model")
+        compare_command = [str(cli), "--engine", "compare", "--bin", str(obj), "--emit-minst-trace", str(ca_trace), "--max-cycles", "512", *model_result_args, *(["--result-dump", str(compare_result)] if result_contract is not None else [])]
+        result = (
+            _run_with_fresh_output(compare_command, compare_result, consumer="compare")
+            if result_contract is not None
+            else _run(compare_command)
+        )
         if result.returncode != 0:
             summary["cases"].append({"id": case_id, "status": "fail", "stage": "compare", "log": result.stdout})
             ok = False
@@ -391,7 +472,15 @@ def main(argv: list[str]) -> int:
             qemu_cmd.extend(["-bios", args.qemu_bios])
         qemu_cmd.extend(["-kernel", str(obj)])
         _verify_artifacts(artifacts, "qemu")
-        result = _run(qemu_cmd, env=env)
+        _verify_artifacts(inputs, "qemu")
+        _verify_components(components, "qemu")
+        result = (
+            _run_with_fresh_output(
+                qemu_cmd, qemu_result, consumer="qemu", env=env
+            )
+            if result_contract is not None
+            else _run(qemu_cmd, env=env)
+        )
         if result.returncode != 0:
             summary["cases"].append({"id": case_id, "status": "fail", "stage": "qemu", "log": result.stdout})
             ok = False
@@ -455,9 +544,13 @@ def main(argv: list[str]) -> int:
             continue
 
         _verify_artifacts(artifacts, "final verification")
+        _verify_artifacts(inputs, "final verification")
+        _verify_components(components, "final verification")
         provenance["verified_after_run"] = True
         case_summary: dict[str, Any] = {
             "id": case_id,
+            "source": str(source_path.resolve()),
+            "source_sha256": inputs["source"]["sha256"],
             "status": "pass",
             "provenance": provenance,
         }
