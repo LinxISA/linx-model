@@ -5,6 +5,7 @@ import copy
 import importlib.util
 import json
 import os
+import re
 import subprocess
 import sys
 import tempfile
@@ -98,6 +99,37 @@ class GenMinstCodecTests(unittest.TestCase):
             )
         self.assertNotEqual(checked.returncode, 0)
         self.assertIn("authority file is missing", checked.stdout + checked.stderr)
+
+    def test_every_ctest_job_uses_exact_immutable_authority(self) -> None:
+        workflow = (MODEL_ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8")
+        jobs = dict(
+            re.findall(
+                r"^  ([A-Za-z0-9_-]+):\n(.*?)(?=^  [A-Za-z0-9_-]+:\n|\Z)",
+                workflow,
+                flags=re.MULTILINE | re.DOTALL,
+            )
+        )
+        authority_jobs = {
+            name: body
+            for name, body in jobs.items()
+            if any(
+                "-L unit" not in line
+                for line in body.splitlines()
+                if "ctest --test-dir" in line
+            )
+        }
+        self.assertEqual(set(authority_jobs), {"st", "sanitizers"})
+        for job_name, body in authority_jobs.items():
+            with self.subTest(job=job_name):
+                self.assertIn("repository: LinxISA/linx-isa", body)
+                self.assertIn(
+                    "ref: ea54153b3351c48df306a57189ffb587801b9197", body
+                )
+                self.assertIn("path: linxisa-authority", body)
+                self.assertIn(
+                    "-DLINXISA_AUTHORITY_ROOT=${{ github.workspace }}/linxisa-authority",
+                    body,
+                )
 
     def test_exact_v0581_authority_and_codec_shape_are_accepted(self) -> None:
         counts = gen_minst_codec.validate_authority(
