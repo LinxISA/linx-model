@@ -147,7 +147,7 @@ class GenMinstCodecTests(unittest.TestCase):
             with self.subTest(job=job_name):
                 self.assertIn("repository: LinxISA/linx-isa", body)
                 self.assertIn(
-                    "ref: e8aa0e2179184df6b3d410163baaa566b92d392e", body
+                    "ref: e0d686c40d074ae0c15702e4d8cdee5ba5279d3a", body
                 )
                 self.assertIn("path: linxisa-authority", body)
                 self.assertIn(

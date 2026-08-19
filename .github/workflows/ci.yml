@@ -79,7 +79,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: LinxISA/linx-isa
-          ref: e8aa0e2179184df6b3d410163baaa566b92d392e
+          ref: e0d686c40d074ae0c15702e4d8cdee5ba5279d3a
           path: linxisa-authority
       - name: Install toolchain
         run: sudo apt-get update && sudo apt-get install -y clang-format cmake ninja-build g++
@@ -104,7 +104,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: LinxISA/linx-isa
-          ref: e8aa0e2179184df6b3d410163baaa566b92d392e
+          ref: e0d686c40d074ae0c15702e4d8cdee5ba5279d3a
           path: linxisa-authority
       - name: Install toolchain
         run: sudo apt-get update && sudo apt-get install -y clang-format cmake ninja-build clang
