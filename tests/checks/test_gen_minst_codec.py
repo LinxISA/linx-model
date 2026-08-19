@@ -66,6 +66,30 @@ class GenMinstCodecTests(unittest.TestCase):
                     spec_path, lock_path, manifest_path
                 )
 
+    def test_first_use_exception_mutation_fails_content_authentication(self) -> None:
+        mutated = copy.deepcopy(self.spec)
+        first_use = mutated["state"]["system_registers"]["trapno_encoding"][
+            "first_use_exception"
+        ]
+        first_use["cause_value"] = 5
+
+        with tempfile.TemporaryDirectory() as td:
+            spec_path = Path(td) / "linxisa-v0.58.json"
+            lock_path = Path(td) / "pto-spec.lock.json"
+            manifest_path = Path(td) / "release_manifest.json"
+            spec_path.write_text(json.dumps(mutated), encoding="utf-8")
+            lock_path.write_bytes(
+                (SUPERPROJECT_ROOT / "isa/v0.58/pto-spec.lock.json").read_bytes()
+            )
+            manifest_path.write_bytes(
+                (SUPERPROJECT_ROOT / "isa/v0.58/release_manifest.json").read_bytes()
+            )
+
+            with self.assertRaisesRegex(ValueError, r"catalog content hash mismatch"):
+                gen_minst_codec.load_and_validate_authority(
+                    spec_path, lock_path, manifest_path
+                )
+
     def test_explicit_authority_root_supports_standalone_freshness(self) -> None:
         checked = subprocess.run(
             [
@@ -123,7 +147,7 @@ class GenMinstCodecTests(unittest.TestCase):
             with self.subTest(job=job_name):
                 self.assertIn("repository: LinxISA/linx-isa", body)
                 self.assertIn(
-                    "ref: ea54153b3351c48df306a57189ffb587801b9197", body
+                    "ref: e8aa0e2179184df6b3d410163baaa566b92d392e", body
                 )
                 self.assertIn("path: linxisa-authority", body)
                 self.assertIn(
