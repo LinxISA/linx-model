@@ -13,6 +13,7 @@ using linx::model::LoadRawBinaryImageFromBytes;
 using linx::model::emulator::CompareHarness;
 using linx::model::emulator::DumpMinstRecord;
 using linx::model::emulator::ExecutionContext;
+using linx::model::emulator::kLinxSharedTileMaxBytes;
 using linx::model::emulator::MakeMinstRecord;
 using linx::model::emulator::ReferenceExecutor;
 using linx::model::emulator::SharedTileBank;
@@ -96,7 +97,9 @@ int TestSharedTileState() {
       return 29;
     }
   }
-  if (SharedTileBank::CapacityBytes(0).has_value() ||
+  const auto max_capacity = SharedTileBank::CapacityBytes(12);
+  if (!max_capacity.has_value() || *max_capacity != kLinxSharedTileMaxBytes ||
+      SharedTileBank::CapacityBytes(0).has_value() ||
       SharedTileBank::CapacityBytes(13).has_value()) {
     return 30;
   }

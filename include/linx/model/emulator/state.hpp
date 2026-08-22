@@ -20,7 +20,7 @@ constexpr std::size_t kLinxTileMaxBytes = 64U * 1024U;
 constexpr std::size_t kLinxTileMaxWords = kLinxTileMaxBytes / 4U;
 constexpr std::size_t kLinxSharedTileCount = 256;
 constexpr std::size_t kLinxCorePeCount = 4;
-constexpr std::size_t kLinxSharedTileMaxBytes = 8U * 1024U;
+constexpr std::size_t kLinxSharedTileMaxBytes = 256U * 1024U;
 
 struct SharedTileDescriptor {
   std::uint32_t dtype = 0;
