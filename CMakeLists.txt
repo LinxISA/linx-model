@@ -16,7 +16,7 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 option(LINX_MODEL_ENABLE_SANITIZERS "Enable ASan, LSan, and UBSan" OFF)
 option(LINX_MODEL_BUILD_DOCS "Enable Doxygen documentation target" OFF)
-set(LINXISA_AUTHORITY_ROOT "" CACHE PATH "Exact LinxISA checkout containing ISA v0.58.1 authority")
+set(LINXISA_AUTHORITY_ROOT "" CACHE PATH "Exact LinxISA checkout containing ISA v0.58.3 authority")
 if(NOT LINXISA_AUTHORITY_ROOT AND
    EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/../../isa/v0.58/linxisa-v0.58.json")
   get_filename_component(
@@ -56,7 +56,7 @@ add_custom_target(
           --header "${CMAKE_CURRENT_SOURCE_DIR}/include/linx/model/isa/generated_tables.hpp"
           --source "${CMAKE_CURRENT_SOURCE_DIR}/src/isa/generated_tables.cpp"
   WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
-  COMMENT "Regenerating committed LinxISA 0.58.1 Minst codec tables")
+  COMMENT "Regenerating committed LinxISA 0.58.3 Minst codec tables")
 
 add_custom_target(
   check-isa-codec
@@ -66,7 +66,7 @@ add_custom_target(
           --source "${CMAKE_CURRENT_SOURCE_DIR}/src/isa/generated_tables.cpp"
           --check
   WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
-  COMMENT "Checking committed LinxISA 0.58.1 Minst codec freshness")
+  COMMENT "Checking committed LinxISA 0.58.3 Minst codec freshness")
 
 target_include_directories(
   linx_model

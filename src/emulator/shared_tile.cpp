@@ -25,7 +25,7 @@ bool DescriptorValid(const SharedTileDescriptor &descriptor, std::uint32_t capac
 } // namespace
 
 std::optional<std::uint32_t> SharedTileBank::CapacityBytes(std::uint8_t size_code) noexcept {
-  if (size_code < 1U || size_code > 7U) {
+  if (size_code < 1U || size_code > 12U) {
     return std::nullopt;
   }
   return 128U << (size_code - 1U);

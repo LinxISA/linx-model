@@ -2,10 +2,10 @@
 
 ## Scope
 
-`linx-model` ships a committed generated LinxISA 0.58.1 codec for `isa::Minst`.
+`linx-model` ships a committed generated LinxISA 0.58.3 codec for `isa::Minst`.
 The source of truth is:
 
-- `isa/v0.58/linxisa-v0.58.json` from the LinxISA 0.58.1 projection, generated
+- `isa/v0.58/linxisa-v0.58.json` from the LinxISA 0.58.3 projection, generated
   from the locked PTO-ISA/pto-spec release
 
 The generated C++ tables are committed under:
@@ -48,8 +48,10 @@ Decoder behavior:
 - chooses the unique most-specific form by fixed-bit count
 - validates field constraints
 - populates `Minst` metadata and typed views
-- exposes exactly 765 current LinxISA forms, including `B.FPATR` and
-  `BSTART.ICALL`, and rejects retired `B.ARG`,
+- exposes exactly 757 current LinxISA forms, including the `B.FPATR`
+  `TransA`/`TransB` form and the `B.IOT`/`B.IOS` `PEMode`/`SizeCode` forms;
+  rejects retired scalar branches `B.EQ`, `B.GE`, `B.GEU`, `B.LT`, `B.LTU`,
+  `B.NE`, `B.NZ`, and `B.Z`, plus retired `B.ARG`,
   `C.B.IOS`, `BSTART.FIXP`, and generic `BSTART.CUBE`/`BSTART.TMA` spellings
 
 ## PTO 0.58 Shared state
@@ -58,9 +60,11 @@ Decoder behavior:
 destination write path preflights every selected PE before applying one atomic
 descriptor-and-payload update. The first write fixes the allocation mask and
 per-PE capacity; later subset writes are legal, while allocation expansion or
-descriptor drift fails without partial effects. A zero PE mask is a strict
-no-op, and uninitialized reads return no value without changing state. PE-mask
-bits are architectural-order: bit 3 selects PE0 through bit 0 selecting PE3.
+descriptor drift fails without partial effects. `PEMode` values decode to the
+fixed participation masks `0000`, `1000`, `0100`, `0010`, `0001`, `1100`,
+`1110`, and `1111`; mode zero is a strict no-op. Uninitialized reads return no
+value without changing state. `B.IOS` accepts `SizeCode` 1 through 12, while
+`B.IOT` accepts 1 through 10.
 
 The machine-readable differential contract is committed at
 `tests/fixtures/pto_v058_shared_state.json`. It fixes the TLSU state
@@ -106,17 +110,18 @@ cmake --build build --target gen-isa-codec
 cmake --build build --target check-isa-codec
 ```
 
-The generator validates the exact root PTO ISA 0.58.1 lock identity, source
-commit/tree, catalog hashes/counts, and the generated 765/2661/3401/780
+The generator validates the exact root PTO ISA 0.58.3 lock identity, source
+commit/tree, catalog hashes/counts, and the generated 757/2643/3375/792
 form/field/piece/constraint cardinalities before writing. `check-isa-codec`
 also rejects stale committed output without modifying it.
 
 It additionally authenticates the complete authority bytes against the
-immutable LinxISA v0.58.1 release: compiled catalog
-`4e8a7e96ebc2710d70bb17b77bc181b9613ca87b9f38a368217d596522d4bbf8`, PTO
-lock `fec69d22b2757ebb8da3876b16e1d5845af188f107f06d05422af15513309dfd`,
+immutable LinxISA v0.58.3 authority at `81bfd0e42f20f5be10af3bd3a17492d586ca42a1`:
+compiled catalog
+`34ecbcfa075166490b622647eb53c13a9c360848d6c7acb2e034d3e47f8c9a8a`, PTO
+lock `d5c17fd6f893267b43ed88ec157cc18ee9848eee6cf1801eaf3fe99358300a4d`,
 and release manifest
-`3f8f746b52aa14ad39c6be83d0ebf3bc260c992c4d3e932b10cef612d0217f6c`.
+`6f1b3fdc81e8be591d74427663a5747e6b2aa884c7d9787b2852b8eba4b5ed4d`.
 Standalone builds must provide that checkout through
 `LINXISA_AUTHORITY_ROOT`; missing authority is an error for generation and
 freshness checks.
