@@ -90,14 +90,14 @@ int TestSharedTileState() {
       .rows = 4,
   };
 
-  for (std::uint8_t code = 1; code <= 7; ++code) {
+  for (std::uint8_t code = 1; code <= 12; ++code) {
     const auto bytes = SharedTileBank::CapacityBytes(code);
     if (!bytes.has_value() || *bytes != (128U << (code - 1U))) {
       return 29;
     }
   }
   if (SharedTileBank::CapacityBytes(0).has_value() ||
-      SharedTileBank::CapacityBytes(8).has_value()) {
+      SharedTileBank::CapacityBytes(13).has_value()) {
     return 30;
   }
 
@@ -190,13 +190,13 @@ int TestSharedTileBindingDecode() {
       inst.mnemonic != "B.IOS" || inst.form_id != "4ba5ef98fdaa") {
     return 40;
   }
-  const std::uint64_t boundary = 0x00001013ULL | (0xffULL << 20U) | (0xfULL << 15U) | (7ULL << 9U);
+  const std::uint64_t boundary = 0x00001013ULL | (0xffULL << 20U) | (12ULL << 15U) | (7ULL << 9U);
   Minst boundary_inst;
   if (DecodeMinstPacked(boundary, 32, boundary_inst) != MinstCodecStatus::Ok ||
       boundary_inst.mnemonic != "B.IOS" ||
       boundary_inst.GetFieldUnsigned("SharedTID").value_or(0) != 0xff ||
-      boundary_inst.GetFieldUnsigned("PE_MASK").value_or(0) != 0xf ||
-      boundary_inst.GetFieldUnsigned("TSize").value_or(0) != 7) {
+      boundary_inst.GetFieldUnsigned("PEMode").value_or(0) != 7 ||
+      boundary_inst.GetFieldUnsigned("SizeCode").value_or(0) != 12) {
     return 41;
   }
   Minst retired;
@@ -208,6 +208,12 @@ int TestSharedTileBindingDecode() {
   if (DecodeMinstPacked(0x10001013ULL, 32, reserved) == MinstCodecStatus::Ok &&
       reserved.mnemonic == "B.IOS") {
     return 43;
+  }
+  Minst retired_mask_shape;
+  const std::uint64_t retired_mask = 0x00001013ULL | (0xfULL << 15U) | (7ULL << 9U);
+  if (DecodeMinstPacked(retired_mask, 32, retired_mask_shape) == MinstCodecStatus::Ok &&
+      retired_mask_shape.mnemonic == "B.IOS") {
+    return 44;
   }
   return 0;
 }

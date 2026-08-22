@@ -225,7 +225,7 @@ int RunConstraintViolationSmoke() {
 
 int RunCoverageRoundTripSmoke() {
   const auto forms = AllMinstForms();
-  if (forms.size() != 765) {
+  if (forms.size() != 757) {
     return 20;
   }
 
@@ -268,7 +268,7 @@ int RunActiveDeltaDecodeSmoke() {
       {"2a33eed646f7", "BSTART.MSCATTER.MASK", MinstOpcodeClass::System},
       {"fd8c8a3b720a", "BSTART.MGATHER.CAS", MinstOpcodeClass::System},
       {"4ba5ef98fdaa", "B.IOS", MinstOpcodeClass::System},
-      {"8b8bce6bffe8", "B.IOT", MinstOpcodeClass::System},
+      {"c11eb189dd83", "B.IOT", MinstOpcodeClass::System},
       {"ae19f5b678f5", "BSTART.TGEMV", MinstOpcodeClass::System},
       {"098c7efa51b0", "BSTART.TMATMULMX.BIAS", MinstOpcodeClass::System},
       {"7e529b871832", "CASB", MinstOpcodeClass::Atomic},
@@ -303,10 +303,14 @@ int RunActiveDeltaDecodeSmoke() {
     }
   }
 
-  if (AllMinstForms().size() != 765 || LookupFormByMnemonic("BSTART.CUBE") != nullptr ||
+  if (AllMinstForms().size() != 757 || LookupFormByMnemonic("BSTART.CUBE") != nullptr ||
       LookupFormByMnemonic("BSTART.TMA") != nullptr ||
       LookupFormByMnemonic("BSTART.FIXP") != nullptr || LookupFormByMnemonic("B.ARG") != nullptr ||
-      LookupFormByMnemonic("C.B.IOS") != nullptr) {
+      LookupFormByMnemonic("C.B.IOS") != nullptr || LookupFormByMnemonic("B.EQ") != nullptr ||
+      LookupFormByMnemonic("B.GE") != nullptr || LookupFormByMnemonic("B.GEU") != nullptr ||
+      LookupFormByMnemonic("B.LT") != nullptr || LookupFormByMnemonic("B.LTU") != nullptr ||
+      LookupFormByMnemonic("B.NE") != nullptr || LookupFormByMnemonic("B.NZ") != nullptr ||
+      LookupFormByMnemonic("B.Z") != nullptr) {
     return 66;
   }
 
