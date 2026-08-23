@@ -156,6 +156,32 @@ class GenMinstCodecTests(unittest.TestCase):
 
         self._assert_catalog_mutation_rejected(remove_transpose_operand)
 
+    def test_hl_lui_high_half_semantic_regression_fails_content_authentication(
+        self,
+    ) -> None:
+        def restore_sign_extension(spec) -> None:
+            semantics = spec["semantics_conventions"]["immediate_materialization"][
+                "hl_lui"
+            ]
+            semantics["imm_kind"] = "signed"
+            semantics["note"] = "No <<12 in HL.LUI."
+            semantics["rule"] = "Write(RegDst, SignExtend(imm32))"
+
+        self._assert_catalog_mutation_rejected(restore_sign_extension)
+
+    def test_csel_srcrtype_semantic_regression_fails_content_authentication(
+        self,
+    ) -> None:
+        def restore_legacy_neg_encoding(spec) -> None:
+            semantics = spec["semantics_conventions"]["srcrtype"]["csel"]
+            semantics["description"] = (
+                "CSEL encodes an optional .neg on SrcR; other SrcRType values "
+                "are treated as 00."
+            )
+            semantics["policy"] = "11_as_neg_else_00"
+
+        self._assert_catalog_mutation_rejected(restore_legacy_neg_encoding)
+
     def test_explicit_authority_root_supports_standalone_freshness(self) -> None:
         checked = subprocess.run(
             [
@@ -213,7 +239,7 @@ class GenMinstCodecTests(unittest.TestCase):
             with self.subTest(job=job_name):
                 self.assertIn("repository: LinxISA/linx-isa", body)
                 self.assertIn(
-                    "ref: 81bfd0e42f20f5be10af3bd3a17492d586ca42a1", body
+                    "ref: 1926864fed9405761f783b130674c45f92210d3d", body
                 )
                 self.assertIn("path: linxisa-authority", body)
                 self.assertIn(
@@ -228,6 +254,30 @@ class GenMinstCodecTests(unittest.TestCase):
         self.assertEqual(
             counts,
             {"forms": 757, "fields": 2643, "pieces": 3375, "constraints": 792},
+        )
+        self.assertEqual(
+            self.spec["semantics_conventions"]["immediate_materialization"][
+                "hl_lui"
+            ],
+            {
+                "imm_kind": "bit-pattern",
+                "note": (
+                    "The split immediate occupies result bits 63:32; result bits "
+                    "31:0 are zero."
+                ),
+                "rule": "Write(RegDst, ZeroExtend(imm32) << 32)",
+            },
+        )
+        self.assertEqual(
+            self.spec["semantics_conventions"]["srcrtype"]["csel"],
+            {
+                "description": (
+                    "CSEL encodes its optional .neg as SrcRType=10; the canonical "
+                    "unmodified spelling uses SrcRType=11 and every other value is "
+                    "also treated as unmodified."
+                ),
+                "policy": "10_as_neg_else_00",
+            },
         )
 
         forms, *_ = gen_minst_codec.build_forms(self.spec)
