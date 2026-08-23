@@ -63,7 +63,7 @@ void PushQueue(std::array<std::uint64_t, kLinxQueueCount> &queue, std::uint64_t 
   queue[0] = value;
 }
 
-void WriteHlLuiDest(LinxState &state, std::uint64_t idx, std::uint64_t value) {
+void WriteHlImmediateDest(LinxState &state, std::uint64_t idx, std::uint64_t value) {
   if (idx == 31) {
     PushQueue(state.tq, value);
   } else if (idx == 30) {
@@ -252,10 +252,23 @@ void ReferenceExecutor::Execute(isa::Minst &inst) {
     state.pc = inst.next_pc;
   } else if (inst.mnemonic == "HL.LUI") {
     const auto rd = inst.dsts.empty() ? 0 : inst.dsts.front().value;
-    const auto imm = GetUnsignedAny(inst, {"imm", "simm22", "simm"}).value_or(0);
-    const auto value = static_cast<std::uint64_t>(
-        static_cast<std::int64_t>(static_cast<std::int32_t>(static_cast<std::uint32_t>(imm))));
-    WriteHlLuiDest(state, rd, value);
+    const auto imm = GetUnsignedAny(inst, {"imm32", "imm"}).value_or(0);
+    const auto value = (imm & UINT64_C(0xffffffff)) << 32U;
+    WriteHlImmediateDest(state, rd, value);
+    commit_record.dst0.data = value;
+    state.pc = inst.next_pc;
+  } else if (inst.mnemonic == "HL.LIU") {
+    const auto rd = inst.dsts.empty() ? 0 : inst.dsts.front().value;
+    const auto imm = GetUnsignedAny(inst, {"uimm32", "imm"}).value_or(0);
+    const auto value = imm & UINT64_C(0xffffffff);
+    WriteHlImmediateDest(state, rd, value);
+    commit_record.dst0.data = value;
+    state.pc = inst.next_pc;
+  } else if (inst.mnemonic == "HL.LIS") {
+    const auto rd = inst.dsts.empty() ? 0 : inst.dsts.front().value;
+    const auto imm = GetSignedAny(inst, {"simm32", "imm"}).value_or(0);
+    const auto value = static_cast<std::uint64_t>(imm);
+    WriteHlImmediateDest(state, rd, value);
     commit_record.dst0.data = value;
     state.pc = inst.next_pc;
   } else if (inst.mnemonic == "ADDI") {
