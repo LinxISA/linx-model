@@ -290,8 +290,8 @@ int TestMinstRecordAdapter() {
 int TestReferenceExecutorExit() {
   const std::vector<std::uint8_t> program = {
       0x00, 0x08,                         // C.BSTART.STD
-      0x0e, 0x00, 0x17, 0x51, 0x55, 0x05, // hl.lui 0x5555, ->a0
-      0x0e, 0x10, 0x97, 0x0f, 0x00, 0x09, // hl.lui 0x10009000, ->t
+      0x0e, 0x00, 0x1d, 0x51, 0x55, 0x05, // hl.liu 0x5555, ->a0
+      0x0e, 0x10, 0x9d, 0x0f, 0x00, 0x09, // hl.liu 0x10009000, ->t
       0x59, 0x20, 0x81, 0x01,             // swi a0, [t#1, 0]
       0x00, 0x00,                         // C.BSTOP
   };
@@ -313,8 +313,8 @@ int TestReferenceExecutorExit() {
 int TestReferenceExecutorImmediateContracts() {
   const std::vector<std::uint8_t> program = {
       0xfe, 0xff, 0x17, 0xf1, 0xff, 0xff, // hl.lui 0xffffffff, ->a0
-      0x1e, 0x11, 0x97, 0x1f, 0x11, 0x11, // hl.lui 0x11111111, ->t
-      0x2e, 0x22, 0x17, 0x2f, 0x22, 0x22, // hl.lui 0x22222222, ->u
+      0xfe, 0xff, 0x9d, 0xff, 0xff, 0xff, // hl.liu 0xffffffff, ->t
+      0xfe, 0xff, 0x0d, 0xff, 0xff, 0xff, // hl.lis -1, ->u
       0x19, 0xa2, 0x11, 0x00,             // lwi [a1, 4], ->a2
       0xd9, 0xaf, 0x32, 0xfe,             // swi a3, [a1, -4]
   };
@@ -328,20 +328,21 @@ int TestReferenceExecutorImmediateContracts() {
   ctx->Write32(0, 0x89abcdef);
 
   ReferenceExecutor executor(ctx);
-  if (!executor.Step() || ctx->State().gpr[2] != UINT64_MAX || !ctx->LastCommitted().has_value() ||
-      ctx->LastCommitted()->dst0.data != UINT64_MAX) {
+  if (!executor.Step() || ctx->State().gpr[2] != 0xffffffff00000000ULL ||
+      !ctx->LastCommitted().has_value() ||
+      ctx->LastCommitted()->dst0.data != 0xffffffff00000000ULL) {
     return 18;
   }
   if (!executor.Step() ||
-      ctx->State().tq != std::array<std::uint64_t, 4>{0x11111111, 0x10, 0x11, 0x12} ||
+      ctx->State().tq != std::array<std::uint64_t, 4>{0xffffffff, 0x10, 0x11, 0x12} ||
       ctx->State().uq != std::array<std::uint64_t, 4>{0x20, 0x21, 0x22, 0x23} ||
-      !ctx->LastCommitted().has_value() || ctx->LastCommitted()->dst0.data != 0x11111111) {
+      !ctx->LastCommitted().has_value() || ctx->LastCommitted()->dst0.data != 0xffffffff) {
     return 19;
   }
   if (!executor.Step() ||
-      ctx->State().uq != std::array<std::uint64_t, 4>{0x22222222, 0x20, 0x21, 0x22} ||
-      ctx->State().tq != std::array<std::uint64_t, 4>{0x11111111, 0x10, 0x11, 0x12} ||
-      !ctx->LastCommitted().has_value() || ctx->LastCommitted()->dst0.data != 0x22222222) {
+      ctx->State().uq != std::array<std::uint64_t, 4>{UINT64_MAX, 0x20, 0x21, 0x22} ||
+      ctx->State().tq != std::array<std::uint64_t, 4>{0xffffffff, 0x10, 0x11, 0x12} ||
+      !ctx->LastCommitted().has_value() || ctx->LastCommitted()->dst0.data != UINT64_MAX) {
     return 20;
   }
   if (!executor.Step() || ctx->State().gpr[4] != 0xffffffff89abcdefULL ||
