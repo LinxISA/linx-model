@@ -193,11 +193,11 @@ int TestSharedTileBindingDecode() {
       inst.mnemonic != "B.IOS" || inst.form_id != "4ba5ef98fdaa") {
     return 40;
   }
-  const std::uint64_t boundary = 0x00001013ULL | (0xffULL << 20U) | (12ULL << 15U) | (7ULL << 9U);
+  const std::uint64_t boundary = 0x00001013ULL | (0x3fULL << 20U) | (12ULL << 15U) | (7ULL << 9U);
   Minst boundary_inst;
   if (DecodeMinstPacked(boundary, 32, boundary_inst) != MinstCodecStatus::Ok ||
       boundary_inst.mnemonic != "B.IOS" ||
-      boundary_inst.GetFieldUnsigned("SharedTID").value_or(0) != 0xff ||
+      boundary_inst.GetFieldUnsigned("SharedTileID").value_or(0) != 0x3f ||
       boundary_inst.GetFieldUnsigned("PEMode").value_or(0) != 7 ||
       boundary_inst.GetFieldUnsigned("SizeCode").value_or(0) != 12) {
     return 41;

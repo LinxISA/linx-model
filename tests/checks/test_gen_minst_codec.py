@@ -45,7 +45,7 @@ class GenMinstCodecTests(unittest.TestCase):
         pattern = form["encoding"]["parts"][0]["pattern"]
         replacement = "1" if pattern[0] != "1" else "0"
         form["encoding"]["parts"][0]["pattern"] = replacement + pattern[1:]
-        self.assertEqual(len(mutated["instructions"]), 757)
+        self.assertEqual(len(mutated["instructions"]), 754)
 
         with tempfile.TemporaryDirectory() as td:
             spec_path = Path(td) / "linxisa-v0.58.json"
@@ -239,7 +239,7 @@ class GenMinstCodecTests(unittest.TestCase):
             with self.subTest(job=job_name):
                 self.assertIn("repository: LinxISA/linx-isa", body)
                 self.assertIn(
-                    "ref: 1926864fed9405761f783b130674c45f92210d3d", body
+                    "ref: 660c870ff241f9803d8060f00ed3684ffed6f06c", body
                 )
                 self.assertIn("path: linxisa-authority", body)
                 self.assertIn(
@@ -247,13 +247,13 @@ class GenMinstCodecTests(unittest.TestCase):
                     body,
                 )
 
-    def test_exact_v0583_authority_and_codec_shape_are_accepted(self) -> None:
+    def test_exact_v0585_authority_and_codec_shape_are_accepted(self) -> None:
         counts = gen_minst_codec.validate_authority(
             self.spec, self.lock, self.release_manifest
         )
         self.assertEqual(
             counts,
-            {"forms": 757, "fields": 2643, "pieces": 3375, "constraints": 792},
+            {"forms": 754, "fields": 2648, "pieces": 3380, "constraints": 815},
         )
         self.assertEqual(
             self.spec["semantics_conventions"]["immediate_materialization"][
@@ -288,7 +288,7 @@ class GenMinstCodecTests(unittest.TestCase):
         self.assertEqual(by_name["BSTART.TLOAD"]["uid"], "d0c18bb0ab15")
         self.assertEqual(
             (by_name["B.FPATR"]["mask"], by_name["B.FPATR"]["match"]),
-            (0x7E7F, 0x2023),
+            (0x7C7F, 0x2023),
         )
         self.assertEqual(by_name["B.FPATR"]["uid"], "30c307e06d4a")
         self.assertEqual(by_uid["c11eb189dd83"]["mnemonic"], "B.IOT")
@@ -299,7 +299,7 @@ class GenMinstCodecTests(unittest.TestCase):
         self.assertEqual(by_name["B.IOS"]["uid"], "4ba5ef98fdaa")
         self.assertEqual(
             (by_name["B.IOS"]["mask"], by_name["B.IOS"]["match"]),
-            (0xF00871FF, 0x1013),
+            (0xFC0871FF, 0x1013),
         )
         for retired in {"B.EQ", "B.GE", "B.GEU", "B.LT", "B.LTU", "B.NE", "B.NZ", "B.Z"}:
             self.assertNotIn(retired, by_name)

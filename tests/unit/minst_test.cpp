@@ -225,7 +225,7 @@ int RunConstraintViolationSmoke() {
 
 int RunCoverageRoundTripSmoke() {
   const auto forms = AllMinstForms();
-  if (forms.size() != 757) {
+  if (forms.size() != 754) {
     return 20;
   }
 
@@ -303,7 +303,7 @@ int RunActiveDeltaDecodeSmoke() {
     }
   }
 
-  if (AllMinstForms().size() != 757 || LookupFormByMnemonic("BSTART.CUBE") != nullptr ||
+  if (AllMinstForms().size() != 754 || LookupFormByMnemonic("BSTART.CUBE") != nullptr ||
       LookupFormByMnemonic("BSTART.TMA") != nullptr ||
       LookupFormByMnemonic("BSTART.FIXP") != nullptr || LookupFormByMnemonic("B.ARG") != nullptr ||
       LookupFormByMnemonic("C.B.IOS") != nullptr || LookupFormByMnemonic("B.EQ") != nullptr ||

@@ -11,41 +11,41 @@ import subprocess
 import tempfile
 
 
-EXPECTED_RELEASE = "0.58.3"
-EXPECTED_ENCODING_ABI = "pto-isa-0.58.3-mode-function-v1"
+EXPECTED_RELEASE = "0.58.5"
+EXPECTED_ENCODING_ABI = "pto-isa-0.58.5-mode-function-v1"
 EXPECTED_ENCODING_PROJECTION_SHA256 = (
-    "8a48b80e04484c70870f155bf9efc79d2a805cf99e809f4e4e8a7e6a7eb34172"
+    "c4a0188f4c9087388fe6239e4ec2da6550b81c87bb1466e6157d69a9aa45f747"
 )
-EXPECTED_SOURCE_COMMIT = "e599a3d36ebfad43362ff591ea5e128816c684c7"
-EXPECTED_SOURCE_TREE = "abb6899d2e664e378ac9c1b77062670daa4d31b4"
+EXPECTED_SOURCE_COMMIT = "6fc3141ac790b6b6fed192bedc99a9264f2b25ac"
+EXPECTED_SOURCE_TREE = "5ce013251b7359b9ddbe5d0d3e2efa3a8613533c"
 EXPECTED_CATALOGS = {
     "command_forms": {
-        "count": 74,
-        "sha256": "fa3c8a6ca86d0fc273052b77d4f977ca69f3b8da6fe94bf6dd0dad44e0dd01e4",
+        "count": 76,
+        "sha256": "2df86181747660ba95dd1dff1d16c9b98896db686714424f32cfaa72974115e9",
     },
     "scalar_forms": {
         "count": 466,
-        "sha256": "bdfcb4df19da4329c5ff0184b34daebf258d832992fa06fb3e0c34ca891c5923",
+        "sha256": "44847ad7289923fedd7d337e18ee8d2d4d2009f912d2f12480f15c0ef36d60ed",
     },
     "tile_operations": {
-        "count": 109,
-        "sha256": "07c5cf6f6e59916f3cbbecb0b83fe364704e1a79e1a43fa83f2997b6f7242207",
+        "count": 107,
+        "sha256": "e5893ebf366c3044a98b4cbd03cf684748b3f5f4f9befd0e012bc93fa852f408",
     },
     "extension_encoding_reservations": {
-        "count": 40,
-        "sha256": "f1b424060d3aae9432934724ba66908eab0476dcc4880447eaaca44fd016be8b",
+        "count": 46,
+        "sha256": "6ed4b51e3918baa83a03972a13c85ea6a4ae72041a1be37b32a752e690ef8c42",
     },
 }
 EXPECTED_CODEC_COUNTS = {
-    "forms": 757,
-    "fields": 2643,
-    "pieces": 3375,
-    "constraints": 792,
+    "forms": 754,
+    "fields": 2648,
+    "pieces": 3380,
+    "constraints": 815,
 }
-EXPECTED_CATALOG_CONTENT_SHA256 = "e003d9a8e8e68de63afe0e8662e59658c173bb651e90f670c490aec2121ad1c8"
-EXPECTED_LOCK_CONTENT_SHA256 = "d5c17fd6f893267b43ed88ec157cc18ee9848eee6cf1801eaf3fe99358300a4d"
+EXPECTED_CATALOG_CONTENT_SHA256 = "ba09fca626f27e3efc4496e763ca3fc1b326709270904664db41da4d54185bcc"
+EXPECTED_LOCK_CONTENT_SHA256 = "8d7b9c7df563f230862891ac4f7da6bbd137a14f1ca8148bbb3685ce10382dc0"
 EXPECTED_RELEASE_MANIFEST_CONTENT_SHA256 = (
-    "6f1b3fdc81e8be591d74427663a5747e6b2aa884c7d9787b2852b8eba4b5ed4d"
+    "aadbbb9a16b11bff97f10cfb0e98a9d538ea02def0ad19f9e14243788bffa916"
 )
 
 
@@ -274,10 +274,10 @@ def validate_authority(spec: dict, lock: dict, release_manifest: dict) -> dict[s
 
     cardinality = release_manifest.get("cardinality") or {}
     for name, expected in (
-        ("command_forms", 74),
+        ("command_forms", 76),
         ("scalar_forms", 466),
-        ("tile_operations", 109),
-        ("extension_encoding_reservations", 40),
+        ("tile_operations", 107),
+        ("extension_encoding_reservations", 46),
     ):
         if cardinality.get(name) != expected:
             raise ValueError(f"release manifest count mismatch: {name}")
@@ -294,8 +294,8 @@ def validate_authority(spec: dict, lock: dict, release_manifest: dict) -> dict[s
 
     by_name = {form["mnemonic"]: form for form in forms}
     required_forms = {
-        "B.FPATR": (0x7E7F, 0x2023),
-        "B.IOS": (0xF00871FF, 0x1013),
+        "B.FPATR": (0x7C7F, 0x2023),
+        "B.IOS": (0xFC0871FF, 0x1013),
         "BSTART.ICALL": (0xF83FFFFF, 0x50166001),
     }
     for mnemonic, (mask, match) in required_forms.items():
