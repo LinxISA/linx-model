@@ -2,10 +2,10 @@
 
 ## Scope
 
-`linx-model` ships a committed generated LinxISA 0.58.3 codec for `isa::Minst`.
+`linx-model` ships a committed generated LinxISA 0.58.6 codec for `isa::Minst`.
 The source of truth is:
 
-- `isa/v0.58/linxisa-v0.58.json` from the LinxISA 0.58.3 projection, generated
+- `isa/v0.58/linxisa-v0.58.json` from the LinxISA 0.58.6 projection, generated
   from the locked PTO-ISA/pto-spec release
 
 The generated C++ tables are committed under:
@@ -48,7 +48,7 @@ Decoder behavior:
 - chooses the unique most-specific form by fixed-bit count
 - validates field constraints
 - populates `Minst` metadata and typed views
-- exposes exactly 757 current LinxISA forms, including the `B.FPATR`
+- exposes exactly 773 current LinxISA forms, including the `B.FPATR`
   `TransA`/`TransB` form and the `B.IOT`/`B.IOS` `PEMode`/`SizeCode` forms;
   rejects retired scalar branches `B.EQ`, `B.GE`, `B.GEU`, `B.LT`, `B.LTU`,
   `B.NE`, `B.NZ`, and `B.Z`, plus retired `B.ARG`,
@@ -110,18 +110,18 @@ cmake --build build --target gen-isa-codec
 cmake --build build --target check-isa-codec
 ```
 
-The generator validates the exact root PTO ISA 0.58.3 lock identity, source
-commit/tree, catalog hashes/counts, and the generated 757/2643/3375/792
+The generator validates the exact root PTO ISA 0.58.6 lock identity, source
+commit/tree, catalog hashes/counts, and the generated 773/2667/3399/1067
 form/field/piece/constraint cardinalities before writing. `check-isa-codec`
 also rejects stale committed output without modifying it.
 
 It additionally authenticates the complete authority bytes against the
-immutable LinxISA v0.58.3 authority at `1926864fed9405761f783b130674c45f92210d3d`:
+immutable LinxISA v0.58.6 authority at `ed3f7a9d9715e6209d7b551aa51865decf59e9e6`:
 compiled catalog
-`e003d9a8e8e68de63afe0e8662e59658c173bb651e90f670c490aec2121ad1c8`, PTO
-lock `d5c17fd6f893267b43ed88ec157cc18ee9848eee6cf1801eaf3fe99358300a4d`,
+`47d7d23e210e8205fa385473136c44613bb52e8de135e77602163147f91eaf91`, PTO
+lock `77e792fb0add49a2cf4a0dcc6853a715d6b1c98490f48649b85f923579ba36be`,
 and release manifest
-`6f1b3fdc81e8be591d74427663a5747e6b2aa884c7d9787b2852b8eba4b5ed4d`.
+`86ad5d2dee02131bf9865ba029d8043112174f94798a5dcdb7e8f8d081415a11`.
 Standalone builds must provide that checkout through
 `LINXISA_AUTHORITY_ROOT`; missing authority is an error for generation and
 freshness checks.
