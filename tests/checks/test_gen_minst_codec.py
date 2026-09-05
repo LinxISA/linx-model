@@ -45,7 +45,7 @@ class GenMinstCodecTests(unittest.TestCase):
         pattern = form["encoding"]["parts"][0]["pattern"]
         replacement = "1" if pattern[0] != "1" else "0"
         form["encoding"]["parts"][0]["pattern"] = replacement + pattern[1:]
-        self.assertEqual(len(mutated["instructions"]), 754)
+        self.assertEqual(len(mutated["instructions"]), 773)
 
         with tempfile.TemporaryDirectory() as td:
             spec_path = Path(td) / "linxisa-v0.58.json"
@@ -239,7 +239,7 @@ class GenMinstCodecTests(unittest.TestCase):
             with self.subTest(job=job_name):
                 self.assertIn("repository: LinxISA/linx-isa", body)
                 self.assertIn(
-                    "ref: 660c870ff241f9803d8060f00ed3684ffed6f06c", body
+                    "ref: ed3f7a9d9715e6209d7b551aa51865decf59e9e6", body
                 )
                 self.assertIn("path: linxisa-authority", body)
                 self.assertIn(
@@ -247,13 +247,13 @@ class GenMinstCodecTests(unittest.TestCase):
                     body,
                 )
 
-    def test_exact_v0585_authority_and_codec_shape_are_accepted(self) -> None:
+    def test_exact_v0586_authority_and_codec_shape_are_accepted(self) -> None:
         counts = gen_minst_codec.validate_authority(
             self.spec, self.lock, self.release_manifest
         )
         self.assertEqual(
             counts,
-            {"forms": 754, "fields": 2648, "pieces": 3380, "constraints": 815},
+            {"forms": 773, "fields": 2667, "pieces": 3399, "constraints": 1067},
         )
         self.assertEqual(
             self.spec["semantics_conventions"]["immediate_materialization"][

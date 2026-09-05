@@ -11,41 +11,41 @@ import subprocess
 import tempfile
 
 
-EXPECTED_RELEASE = "0.58.5"
-EXPECTED_ENCODING_ABI = "pto-isa-0.58.5-mode-function-v1"
+EXPECTED_RELEASE = "0.58.6"
+EXPECTED_ENCODING_ABI = "pto-isa-0.58.6-mode-function-v1"
 EXPECTED_ENCODING_PROJECTION_SHA256 = (
-    "c4a0188f4c9087388fe6239e4ec2da6550b81c87bb1466e6157d69a9aa45f747"
+    "a757f2e50ec8050d2131b6b9ad38657511df80cf3f9424d5f009ea6e0cc35839"
 )
-EXPECTED_SOURCE_COMMIT = "6fc3141ac790b6b6fed192bedc99a9264f2b25ac"
-EXPECTED_SOURCE_TREE = "5ce013251b7359b9ddbe5d0d3e2efa3a8613533c"
+EXPECTED_SOURCE_COMMIT = "dea0b75e803cffa873982c90f9aa0cd17c6d243b"
+EXPECTED_SOURCE_TREE = "64571b898e5acb437b93fdedb415e193bb63f60f"
 EXPECTED_CATALOGS = {
     "command_forms": {
-        "count": 76,
-        "sha256": "2df86181747660ba95dd1dff1d16c9b98896db686714424f32cfaa72974115e9",
+        "count": 95,
+        "sha256": "013e5161bc095f59a4784f37ebbe04e332748782bdd9f540b18cd8fdc95fc7b6",
     },
     "scalar_forms": {
         "count": 466,
-        "sha256": "44847ad7289923fedd7d337e18ee8d2d4d2009f912d2f12480f15c0ef36d60ed",
+        "sha256": "659feca66ad67db81726c8e0139e614b3ced2694e645f9e5dda534832920d2dd",
     },
     "tile_operations": {
-        "count": 107,
-        "sha256": "e5893ebf366c3044a98b4cbd03cf684748b3f5f4f9befd0e012bc93fa852f408",
+        "count": 117,
+        "sha256": "d23530aa58afa5dbe5bee1e56366be3c5711583b69908f6af9799742c6c005e4",
     },
     "extension_encoding_reservations": {
         "count": 46,
-        "sha256": "6ed4b51e3918baa83a03972a13c85ea6a4ae72041a1be37b32a752e690ef8c42",
+        "sha256": "3daf7bf384dc0ff64bd8374634a8b6a057eea6ca76b67b67ab0d9496471110ae",
     },
 }
 EXPECTED_CODEC_COUNTS = {
-    "forms": 754,
-    "fields": 2648,
-    "pieces": 3380,
-    "constraints": 815,
+    "forms": 773,
+    "fields": 2667,
+    "pieces": 3399,
+    "constraints": 1067,
 }
-EXPECTED_CATALOG_CONTENT_SHA256 = "ba09fca626f27e3efc4496e763ca3fc1b326709270904664db41da4d54185bcc"
-EXPECTED_LOCK_CONTENT_SHA256 = "8d7b9c7df563f230862891ac4f7da6bbd137a14f1ca8148bbb3685ce10382dc0"
+EXPECTED_CATALOG_CONTENT_SHA256 = "47d7d23e210e8205fa385473136c44613bb52e8de135e77602163147f91eaf91"
+EXPECTED_LOCK_CONTENT_SHA256 = "77e792fb0add49a2cf4a0dcc6853a715d6b1c98490f48649b85f923579ba36be"
 EXPECTED_RELEASE_MANIFEST_CONTENT_SHA256 = (
-    "aadbbb9a16b11bff97f10cfb0e98a9d538ea02def0ad19f9e14243788bffa916"
+    "86ad5d2dee02131bf9865ba029d8043112174f94798a5dcdb7e8f8d081415a11"
 )
 
 
@@ -274,9 +274,9 @@ def validate_authority(spec: dict, lock: dict, release_manifest: dict) -> dict[s
 
     cardinality = release_manifest.get("cardinality") or {}
     for name, expected in (
-        ("command_forms", 76),
+        ("command_forms", 95),
         ("scalar_forms", 466),
-        ("tile_operations", 107),
+        ("tile_operations", 117),
         ("extension_encoding_reservations", 46),
     ):
         if cardinality.get(name) != expected:

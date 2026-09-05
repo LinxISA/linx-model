@@ -75,11 +75,11 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Check out immutable LinxISA v0.58.5 authority
+      - name: Check out immutable LinxISA v0.58.6 authority
         uses: actions/checkout@v4
         with:
           repository: LinxISA/linx-isa
-          ref: 660c870ff241f9803d8060f00ed3684ffed6f06c
+          ref: ed3f7a9d9715e6209d7b551aa51865decf59e9e6
           path: linxisa-authority
       - name: Install toolchain
         run: sudo apt-get update && sudo apt-get install -y clang-format cmake ninja-build g++
@@ -100,11 +100,11 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Check out immutable LinxISA v0.58.5 authority
+      - name: Check out immutable LinxISA v0.58.6 authority
         uses: actions/checkout@v4
         with:
           repository: LinxISA/linx-isa
-          ref: 660c870ff241f9803d8060f00ed3684ffed6f06c
+          ref: ed3f7a9d9715e6209d7b551aa51865decf59e9e6
           path: linxisa-authority
       - name: Install toolchain
         run: sudo apt-get update && sudo apt-get install -y clang-format cmake ninja-build clang
