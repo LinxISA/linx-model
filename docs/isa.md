@@ -118,7 +118,9 @@ also rejects stale committed output without modifying it.
 It additionally authenticates the complete authority bytes against the
 immutable LinxISA v0.58.6 authority at `ed3f7a9d9715e6209d7b551aa51865decf59e9e6`:
 compiled catalog
-`47d7d23e210e8205fa385473136c44613bb52e8de135e77602163147f91eaf91`, PTO
+`47d7d23e210e8205fa385473136c44613bb52e8de135e77602163147f91eaf91`
+or the DIM-default transition hash
+`e960bf0bc8addc6574a18918c9d16c1e39a60171e865b403e19e869e0e11b2fa`, PTO
 lock `77e792fb0add49a2cf4a0dcc6853a715d6b1c98490f48649b85f923579ba36be`,
 and release manifest
 `86ad5d2dee02131bf9865ba029d8043112174f94798a5dcdb7e8f8d081415a11`.

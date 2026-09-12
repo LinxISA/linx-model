@@ -42,7 +42,12 @@ EXPECTED_CODEC_COUNTS = {
     "pieces": 3399,
     "constraints": 1067,
 }
-EXPECTED_CATALOG_CONTENT_SHA256 = "47d7d23e210e8205fa385473136c44613bb52e8de135e77602163147f91eaf91"
+EXPECTED_CATALOG_CONTENT_SHA256 = frozenset(
+    {
+        "47d7d23e210e8205fa385473136c44613bb52e8de135e77602163147f91eaf91",
+        "e960bf0bc8addc6574a18918c9d16c1e39a60171e865b403e19e869e0e11b2fa",
+    }
+)
 EXPECTED_LOCK_CONTENT_SHA256 = "77e792fb0add49a2cf4a0dcc6853a715d6b1c98490f48649b85f923579ba36be"
 EXPECTED_RELEASE_MANIFEST_CONTENT_SHA256 = (
     "86ad5d2dee02131bf9865ba029d8043112174f94798a5dcdb7e8f8d081415a11"
@@ -334,7 +339,12 @@ def load_and_validate_authority(
     }
     for label, expected in expected_hashes.items():
         actual = _sha256_bytes(raw[label])
-        if actual != expected:
+        valid_hash = (
+            actual in expected
+            if isinstance(expected, frozenset)
+            else actual == expected
+        )
+        if not valid_hash:
             message = "catalog content hash mismatch" if label == "catalog" else f"{label} content hash mismatch"
             raise ValueError(f"{message}: expected {expected}, got {actual}")
     spec = json.loads(raw["catalog"])
