@@ -3,6 +3,7 @@
 #include <memory>
 #include <sstream>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include "linx/model.hpp"
@@ -83,6 +84,10 @@ int TestMemoryRangeRead() {
 
 int TestSharedTileState() {
   SharedTileBank bank;
+  static_assert(linx::model::emulator::kLinxSharedTileCount == 64);
+  if (bank.Read(64, 0) != nullptr) {
+    return 45;
+  }
   const SharedTileDescriptor descriptor{
       .dtype = 3,
       .valid_cols = 8,
@@ -110,6 +115,11 @@ int TestSharedTileState() {
   descriptors[1].valid_rows = 2;
   payloads[0].assign(128, 0x11);
   payloads[1].assign(128, 0x22);
+  if (bank.Write(63, 0x8, 1, descriptor, payloads) != SharedTileWriteStatus::Applied ||
+      bank.Read(63, 0) == nullptr ||
+      bank.Write(64, 0x8, 1, descriptor, payloads) != SharedTileWriteStatus::InvalidRegister) {
+    return 45;
+  }
   if (bank.Write(7, 0, 1, descriptor, payloads) != SharedTileWriteStatus::Noop ||
       bank.Version(7).allocation_mask != 0 || bank.Version(7).initialized_mask != 0) {
     return 31;
@@ -263,10 +273,38 @@ int TestTileHeadersAndUnsupportedScalar() {
     ctx->LoadProgram(LoadRawBinaryImageFromBytes(bytes, "casb-unsupported", 0));
     ReferenceExecutor executor(ctx);
     if (executor.Step() || !ctx->Terminated() || ctx->ExitCode() != 1 ||
-        ctx->LastError() != "unsupported_instruction:CASB" || !ctx->LastCommitted().has_value() ||
-        std::string_view(ctx->LastCommitted()->mnemonic) != "CASB" ||
-        std::string_view(ctx->LastCommitted()->opcode_class) != "atomic") {
+        ctx->LastError() != "unsupported_instruction:CASB" || ctx->LastCommitted().has_value() ||
+        ctx->State().insn_count != 0 || ctx->State().pc != 0) {
       return 28;
+    }
+  }
+
+  constexpr std::array<std::pair<std::string_view, std::string_view>, 11> kEncodingOnlyForms{{
+      {"5af48f644596", "DMA.FREE.L"},
+      {"5de9a6bba806", "DMA.FREE.S"},
+      {"d6af61213c20", "MCOPY.DL"},
+      {"e7a90ccbe4db", "MCOPY.DS"},
+      {"ad18d71fad23", "SB.ADD"},
+      {"229d7d0e2803", "SB.SUB"},
+      {"2b9cdb568661", "SD.SUB"},
+      {"95d11aed3630", "SH.ADD"},
+      {"a50037f3c97d", "SH.SUB"},
+      {"33654a8ba8c8", "SW.SUB"},
+      {"0330a02b7c32", "SYNC.CORE"},
+  }};
+  for (const auto &[uid, mnemonic] : kEncodingOnlyForms) {
+    const auto bytes = EncodedBytes(BuildZeroInst(uid));
+    if (bytes.empty()) {
+      return 29;
+    }
+    auto ctx = std::make_shared<ExecutionContext>();
+    ctx->LoadProgram(LoadRawBinaryImageFromBytes(bytes, "encoding-only-unsupported", 0));
+    ReferenceExecutor executor(ctx);
+    if (executor.Step() || !ctx->Terminated() || ctx->ExitCode() != 1 ||
+        ctx->LastError() != std::string("unsupported_instruction:") + std::string(mnemonic) ||
+        ctx->State().pc != 0 || ctx->State().insn_count != 0 || ctx->State().insn_pc_next != 0 ||
+        ctx->LastCommitted().has_value()) {
+      return 30;
     }
   }
 
@@ -355,6 +393,71 @@ int TestReferenceExecutorImmediateContracts() {
       !ctx->LastCommitted().has_value() || ctx->LastCommitted()->memory.addr != UINT64_MAX - 1) {
     return 22;
   }
+  return 0;
+}
+
+int TestReferenceExecutorMovrContracts() {
+  const auto make_movr = [](std::uint64_t src, std::uint64_t dst) {
+    auto inst = BuildZeroInst("80d2b5f3580b");
+    inst.SetDecodedField("SrcL", src, false, 5);
+    inst.SetDecodedField("RegDst", dst, false, 5);
+    inst.RebuildTypedViews();
+    return EncodedBytes(inst);
+  };
+
+  {
+    auto ctx = std::make_shared<ExecutionContext>();
+    ctx->LoadProgram(LoadRawBinaryImageFromBytes(make_movr(24, 2), "movr-snapshot-gpr", 0));
+    ctx->State().tq = {0x1234, 0x22, 0x33, 0x44};
+    ReferenceExecutor executor(ctx);
+    if (!executor.Step() || ctx->State().gpr[2] != 0x1234 ||
+        ctx->State().tq != std::array<std::uint64_t, 4>{0x1234, 0x22, 0x33, 0x44} ||
+        ctx->State().pc != 2 || !ctx->LastCommitted().has_value() ||
+        ctx->LastCommitted()->dst0.data != 0x1234) {
+      return 46;
+    }
+  }
+
+  {
+    auto ctx = std::make_shared<ExecutionContext>();
+    ctx->LoadProgram(LoadRawBinaryImageFromBytes(make_movr(24, 31), "movr-push-t", 0));
+    ctx->State().tq = {0x10, 0x11, 0x12, 0x13};
+    ReferenceExecutor executor(ctx);
+    if (!executor.Step() ||
+        ctx->State().tq != std::array<std::uint64_t, 4>{0x10, 0x10, 0x11, 0x12} ||
+        ctx->State().uq != std::array<std::uint64_t, 4>{}) {
+      return 47;
+    }
+  }
+
+  {
+    auto ctx = std::make_shared<ExecutionContext>();
+    ctx->LoadProgram(LoadRawBinaryImageFromBytes(make_movr(2, 30), "movr-push-u", 0));
+    ctx->State().gpr[2] = 0x5678;
+    ctx->State().uq = {0x20, 0x21, 0x22, 0x23};
+    ReferenceExecutor executor(ctx);
+    if (!executor.Step() ||
+        ctx->State().uq != std::array<std::uint64_t, 4>{0x5678, 0x20, 0x21, 0x22}) {
+      return 48;
+    }
+  }
+
+  for (std::uint64_t dst = 24; dst <= 29; ++dst) {
+    auto ctx = std::make_shared<ExecutionContext>();
+    ctx->LoadProgram(LoadRawBinaryImageFromBytes(make_movr(2, dst), "movr-discard", 0));
+    ctx->State().gpr[2] = 0x9abc;
+    ctx->State().tq = {0x10, 0x11, 0x12, 0x13};
+    ctx->State().uq = {0x20, 0x21, 0x22, 0x23};
+    const auto gpr_before = ctx->State().gpr;
+    const auto tq_before = ctx->State().tq;
+    const auto uq_before = ctx->State().uq;
+    ReferenceExecutor executor(ctx);
+    if (!executor.Step() || ctx->State().gpr != gpr_before || ctx->State().tq != tq_before ||
+        ctx->State().uq != uq_before) {
+      return 49;
+    }
+  }
+
   return 0;
 }
 
@@ -469,6 +572,9 @@ int main() {
     return rc;
   }
   if (const int rc = TestReferenceExecutorImmediateContracts(); rc != 0) {
+    return rc;
+  }
+  if (const int rc = TestReferenceExecutorMovrContracts(); rc != 0) {
     return rc;
   }
   if (const int rc = TestFinisherContract(); rc != 0) {

@@ -18,7 +18,7 @@ constexpr std::size_t kLinxTileMaxIot = 32;
 constexpr std::size_t kLinxVecRiMax = kLinxTileMaxIor * 3;
 constexpr std::size_t kLinxTileMaxBytes = 64U * 1024U;
 constexpr std::size_t kLinxTileMaxWords = kLinxTileMaxBytes / 4U;
-constexpr std::size_t kLinxSharedTileCount = 256;
+constexpr std::size_t kLinxSharedTileCount = 64;
 constexpr std::size_t kLinxCorePeCount = 4;
 constexpr std::size_t kLinxSharedTileMaxBytes = 256U * 1024U;
 
