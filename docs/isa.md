@@ -62,7 +62,7 @@ completion semantics are intentionally not modeled.
 
 ## PTO 0.58 Shared state
 
-`emulator::SharedTileBank` models one core-private `S0..S255` bank. Its
+`emulator::SharedTileBank` models one core-private `S0..S63` bank. Its
 destination write path preflights every selected PE before applying one atomic
 descriptor-and-payload update. The first write fixes the allocation mask and
 per-PE capacity; later subset writes are legal, while allocation expansion or
@@ -72,10 +72,13 @@ fixed participation masks `0000`, `1000`, `0100`, `0010`, `0001`, `1100`,
 value without changing state. `B.IOS` accepts `SizeCode` 1 through 12, while
 `B.IOT` accepts 1 through 10.
 
-The machine-readable differential contract is committed at
-`tests/fixtures/pto_v058_shared_state.json`. It fixes the TLSU state
-transitions plus the TMOV, cooperative CUBE, and TGEMV Shared-operand policy so
-QEMU, LinxCoreModel, and RTL validation can consume the same cases.
+The historical 0.58.3 differential fixture is retained at
+`tests/fixtures/pto_v058_shared_state.json`. It is not current PTO golden
+conformance evidence. The storage helper retains a partial per-PE model;
+current Core-wide payload partition and last-use semantics are not implemented.
+The reference executor rejects unhandled instructions before architectural
+state or retirement changes; it never treats missing handlers as successful
+no-ops.
 
 Encoder behavior:
 

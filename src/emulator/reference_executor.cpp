@@ -41,21 +41,6 @@ std::uint64_t ReadGpr(const LinxState &state, std::uint64_t idx) {
   return state.gpr[idx];
 }
 
-void WriteGpr(LinxState &state, std::uint64_t idx, std::uint64_t value) {
-  if (idx == 0 || idx >= kLinxGprCount) {
-    if (idx >= 24 && idx < 28) {
-      state.tq[idx - 24] = value;
-      return;
-    }
-    if (idx >= 28 && idx < 32) {
-      state.uq[idx - 28] = value;
-      return;
-    }
-    return;
-  }
-  state.gpr[idx] = value;
-}
-
 void PushQueue(std::array<std::uint64_t, kLinxQueueCount> &queue, std::uint64_t value) {
   for (std::size_t idx = queue.size() - 1; idx > 0; --idx) {
     queue[idx] = queue[idx - 1];
@@ -63,13 +48,13 @@ void PushQueue(std::array<std::uint64_t, kLinxQueueCount> &queue, std::uint64_t 
   queue[0] = value;
 }
 
-void WriteHlImmediateDest(LinxState &state, std::uint64_t idx, std::uint64_t value) {
+void WriteScalarDestination(LinxState &state, std::uint64_t idx, std::uint64_t value) {
   if (idx == 31) {
     PushQueue(state.tq, value);
   } else if (idx == 30) {
     PushQueue(state.uq, value);
-  } else {
-    WriteGpr(state, idx, value);
+  } else if (idx > 0 && idx < kLinxGprCount) {
+    state.gpr[idx] = value;
   }
 }
 
@@ -113,11 +98,15 @@ bool IsTileHeader(const isa::Minst &inst) {
   return block_kind == "tlsu" || block_kind == "cube" || block_kind == "tepl";
 }
 
-bool IsUnsupportedScalar(const isa::Minst &inst) {
-  return inst.mnemonic == "CASB" || inst.mnemonic == "CASH" || inst.mnemonic == "CASW" ||
-         inst.mnemonic == "CASD" || inst.mnemonic == "DMA" || inst.mnemonic == "DMA.FREE.L" ||
-         inst.mnemonic == "DMA.FREE.S" || inst.mnemonic == "MCOPY.DL" ||
-         inst.mnemonic == "MCOPY.DS";
+bool IsImplemented(const isa::Minst &inst) {
+  return inst.mnemonic == "C.BSTART.STD" || inst.mnemonic == "C.BSTART.VPAR" ||
+         inst.mnemonic == "C.BSTART.VSEQ" || inst.mnemonic == "C.BSTART" ||
+         inst.mnemonic == "C.BSTOP" || inst.mnemonic == "C.MOVI" || inst.mnemonic == "C.MOVR" ||
+         inst.mnemonic == "LUI" || inst.mnemonic == "HL.LUI" || inst.mnemonic == "HL.LIU" ||
+         inst.mnemonic == "HL.LIS" || inst.mnemonic == "ADDI" || inst.mnemonic == "LWI" ||
+         inst.mnemonic == "SWI" || inst.mnemonic == "SETC.NE" || inst.mnemonic == "SETC.LTU" ||
+         inst.mnemonic == "SSRSET" || inst.mnemonic == "MCOPY" || inst.mnemonic == "MSET" ||
+         IsTileHeader(inst) || inst.mnemonic == "B.TEXT";
 }
 
 } // namespace
@@ -187,6 +176,11 @@ void ReferenceExecutor::Run(std::optional<std::uint64_t> stop_pc,
 void ReferenceExecutor::Execute(isa::Minst &inst) {
   auto &ctx = *ctx_;
   auto &state = ctx.State();
+  if (!IsImplemented(inst)) {
+    inst.annotation = "instruction decoded; reference executor semantics are not implemented";
+    ctx.RequestTerminate(1, std::string("unsupported_instruction:") + std::string(inst.mnemonic));
+    return;
+  }
   const auto current_pc = state.pc;
   state.insn_pc_next = inst.next_pc;
   ++state.insn_count;
@@ -242,43 +236,50 @@ void ReferenceExecutor::Execute(isa::Minst &inst) {
     state.blocktype = 0;
     state.carg = 0;
   } else if (inst.mnemonic == "C.MOVI") {
-    WriteGpr(state, inst.dsts.empty() ? 0 : inst.dsts.front().value,
-             static_cast<std::uint64_t>(GetSignedAny(inst, {"simm5"}).value_or(0)));
-    commit_record.dst0.data = ReadGpr(state, inst.dsts.empty() ? 0 : inst.dsts.front().value);
+    const auto value = static_cast<std::uint64_t>(GetSignedAny(inst, {"simm5"}).value_or(0));
+    WriteScalarDestination(state, inst.dsts.empty() ? 0 : inst.dsts.front().value, value);
+    commit_record.dst0.data = value;
+    state.pc = inst.next_pc;
+  } else if (inst.mnemonic == "C.MOVR") {
+    const auto value = ReadGpr(state, inst.srcs.empty() ? 0 : inst.srcs.front().value);
+    WriteScalarDestination(state, inst.dsts.empty() ? 0 : inst.dsts.front().value, value);
+    commit_record.dst0.data = value;
     state.pc = inst.next_pc;
   } else if (inst.mnemonic == "LUI") {
     const auto rd = inst.dsts.empty() ? 0 : inst.dsts.front().value;
     const auto imm = GetSignedAny(inst, {"simm20", "imm20", "simm", "imm"}).value_or(0);
-    WriteGpr(state, rd, static_cast<std::uint64_t>(imm) << 12U);
-    commit_record.dst0.data = ReadGpr(state, rd);
+    const auto value = static_cast<std::uint64_t>(imm) << 12U;
+    WriteScalarDestination(state, rd, value);
+    commit_record.dst0.data = value;
     state.pc = inst.next_pc;
   } else if (inst.mnemonic == "HL.LUI") {
     const auto rd = inst.dsts.empty() ? 0 : inst.dsts.front().value;
     const auto imm = GetUnsignedAny(inst, {"imm32", "imm"}).value_or(0);
     const auto value = (imm & UINT64_C(0xffffffff)) << 32U;
-    WriteHlImmediateDest(state, rd, value);
+    WriteScalarDestination(state, rd, value);
     commit_record.dst0.data = value;
     state.pc = inst.next_pc;
   } else if (inst.mnemonic == "HL.LIU") {
     const auto rd = inst.dsts.empty() ? 0 : inst.dsts.front().value;
     const auto imm = GetUnsignedAny(inst, {"uimm32", "imm"}).value_or(0);
     const auto value = imm & UINT64_C(0xffffffff);
-    WriteHlImmediateDest(state, rd, value);
+    WriteScalarDestination(state, rd, value);
     commit_record.dst0.data = value;
     state.pc = inst.next_pc;
   } else if (inst.mnemonic == "HL.LIS") {
     const auto rd = inst.dsts.empty() ? 0 : inst.dsts.front().value;
     const auto imm = GetSignedAny(inst, {"simm32", "imm"}).value_or(0);
     const auto value = static_cast<std::uint64_t>(imm);
-    WriteHlImmediateDest(state, rd, value);
+    WriteScalarDestination(state, rd, value);
     commit_record.dst0.data = value;
     state.pc = inst.next_pc;
   } else if (inst.mnemonic == "ADDI") {
     const auto rd = inst.dsts.empty() ? 0 : inst.dsts.front().value;
     const auto rs = inst.srcs.empty() ? 0 : inst.srcs.front().value;
     const auto imm = GetSignedAny(inst, {"uimm", "uimm12", "simm", "imms", "simm12"}).value_or(0);
-    WriteGpr(state, rd, ReadGpr(state, rs) + static_cast<std::uint64_t>(imm));
-    commit_record.dst0.data = ReadGpr(state, rd);
+    const auto value = ReadGpr(state, rs) + static_cast<std::uint64_t>(imm);
+    WriteScalarDestination(state, rd, value);
+    commit_record.dst0.data = value;
     state.pc = inst.next_pc;
   } else if (inst.mnemonic == "LWI") {
     const auto rd = inst.dsts.empty() ? 0 : inst.dsts.front().value;
@@ -289,7 +290,7 @@ void ReferenceExecutor::Execute(isa::Minst &inst) {
     const auto raw_value = ctx.Read32(addr).value_or(0);
     const auto value =
         static_cast<std::uint64_t>(static_cast<std::int64_t>(static_cast<std::int32_t>(raw_value)));
-    WriteGpr(state, rd, value);
+    WriteScalarDestination(state, rd, value);
     commit_record.dst0.data = value;
     commit_record.memory.valid = 1;
     commit_record.memory.is_load = 1;
@@ -353,11 +354,6 @@ void ReferenceExecutor::Execute(isa::Minst &inst) {
     commit_record.block_kind[0] = 0;
     std::strncpy(commit_record.block_kind, header_block_kind.c_str(),
                  sizeof(commit_record.block_kind) - 1U);
-  } else if (IsUnsupportedScalar(inst)) {
-    inst.annotation = "instruction decoded; reference executor semantics are not implemented";
-    ctx.RequestTerminate(1, std::string("unsupported_instruction:") + std::string(inst.mnemonic));
-  } else {
-    state.pc = inst.next_pc;
   }
 
   inst.MarkRetired();
