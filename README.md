@@ -97,7 +97,7 @@ For a standalone checkout, configure with an immutable LinxISA authority:
 
 ```bash
 cmake -S . -B build -G Ninja \
-  -DLINXISA_AUTHORITY_ROOT=/path/to/linx-isa-at-f77a8960f61f97c264a90b7aee757f99891b0943
+  -DLINXISA_AUTHORITY_ROOT=/path/to/linx-isa-at-1deac9de1d2303baa04448e8a5c3520fc9b56ec0
 cmake --build build --target check-isa-codec
 ```
 

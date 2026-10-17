@@ -175,10 +175,10 @@ class GenMinstCodecTests(unittest.TestCase):
         def restore_legacy_neg_encoding(spec) -> None:
             semantics = spec["semantics_conventions"]["srcrtype"]["csel"]
             semantics["description"] = (
-                "CSEL encodes an optional .neg on SrcR; other SrcRType values "
-                "are treated as 00."
+                "CSEL encodes its optional .neg as SrcRType=10; every other "
+                "value is treated as unmodified."
             )
-            semantics["policy"] = "11_as_neg_else_00"
+            semantics["policy"] = "10_as_neg_else_none"
 
         self._assert_catalog_mutation_rejected(restore_legacy_neg_encoding)
 
@@ -239,7 +239,7 @@ class GenMinstCodecTests(unittest.TestCase):
             with self.subTest(job=job_name):
                 self.assertIn("repository: LinxISA/linx-isa", body)
                 self.assertIn(
-                    "ref: f77a8960f61f97c264a90b7aee757f99891b0943", body
+                    "ref: 1deac9de1d2303baa04448e8a5c3520fc9b56ec0", body
                 )
                 self.assertIn("path: linxisa-authority", body)
                 self.assertIn(
@@ -248,6 +248,14 @@ class GenMinstCodecTests(unittest.TestCase):
                 )
 
     def test_exact_v0587_authority_and_codec_shape_are_accepted(self) -> None:
+        self.assertEqual(
+            gen_minst_codec.EXPECTED_LINXISA_SOURCE_COMMIT,
+            "1deac9de1d2303baa04448e8a5c3520fc9b56ec0",
+        )
+        self.assertEqual(
+            gen_minst_codec.EXPECTED_LINXISA_SOURCE_TREE,
+            "4c4be0b8641b00acdd15b26b7ee4280fc610c8fb",
+        )
         counts = gen_minst_codec.validate_authority(
             self.spec, self.lock, self.release_manifest
         )
@@ -272,11 +280,30 @@ class GenMinstCodecTests(unittest.TestCase):
             self.spec["semantics_conventions"]["srcrtype"]["csel"],
             {
                 "description": (
-                    "CSEL encodes its optional .neg as SrcRType=10; the canonical "
-                    "unmodified spelling uses SrcRType=11 and every other value is "
-                    "also treated as unmodified."
+                    "CSEL encodes its optional .neg as SrcRType=11; raw 00, 01, "
+                    "and 10 are unmodified aliases."
                 ),
-                "policy": "10_as_neg_else_00",
+                "policy": "11_as_neg_else_none",
+            },
+        )
+        self.assertEqual(
+            self.spec["state"]["architectural_state"]["state"][
+                "bundle_dimensions"
+            ],
+            {
+                "explicit_write": (
+                    "B.DIM or C.B.DIMI replaces the selected register value, "
+                    "including explicit zero"
+                ),
+                "omission_default": 1,
+                "presence_role": (
+                    "write-once duplicate detection and trap recovery only; "
+                    "never operation legality or descriptor inheritance"
+                ),
+                "registers": ["LB0", "LB1", "LB2"],
+                "semantic_equivalence": (
+                    "an omitted dimension is equivalent to an explicit value one"
+                ),
             },
         )
 

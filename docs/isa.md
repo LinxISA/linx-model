@@ -125,12 +125,17 @@ form/field/piece/constraint cardinalities before writing. `check-isa-codec`
 also rejects stale committed output without modifying it.
 
 It additionally authenticates the complete authority bytes against the
-immutable LinxISA v0.58.7 authority at `f77a8960f61f97c264a90b7aee757f99891b0943`:
+immutable LinxISA v0.58.7 authority at
+`1deac9de1d2303baa04448e8a5c3520fc9b56ec0` (tree
+`4c4be0b8641b00acdd15b26b7ee4280fc610c8fb`):
 compiled catalog
-`51ca9be275518d29ec48bed570b7a9bd441a65b9c5e6d4f79072f650ee732925`, PTO
+`5c01ea73c09305284ee00dbc4bd869925662af80d564c706761b59b9bc592c67`, PTO
 development lock `92f3ca32db8e40d3aab1dc5450ee594216c273c7923cf14b1a417d3509db4067`,
 and release manifest
 `873716bde4e0a58f47da8ea8ef531754e1bcc5c2a89219e9d5f4c092a3d16d75`.
+This authority refresh records the corrected CSEL source-modifier convention
+and the omitted-dimension default of one. It does not change the generated
+794-form encoding projection or expand the model's executable subset.
 Standalone builds must provide that checkout through
 `LINXISA_AUTHORITY_ROOT`; missing authority is an error for generation and
 freshness checks.
