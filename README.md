@@ -11,7 +11,7 @@ state.
 - `SimQueue<T>` models latency-aware, cycle-visible FIFO movement for value
   payloads, `std::unique_ptr<T>`, and `std::shared_ptr<T>`.
 - `isa::Minst` is the single in-flight uop payload. Fetch allocates
-  `MinstPtr`, decode populates generated LinxISA 0.58.6 fields, and retire/flush
+  `MinstPtr`, decode populates generated LinxISA 0.58.7 fields, and retire/flush
   or DFX consumes the same object.
 - `ProgramImage` plus the ELF/raw loader and ISA disassembler let the model CLI
   load a binary, decode instructions, and print assembly directly from the
@@ -71,7 +71,7 @@ ctest --test-dir build-sanitize --output-on-failure
   semantics
 - [`docs/testing.md`](./docs/testing.md) UT / ST / checks / sanitizers
 - [`docs/logging.md`](./docs/logging.md) structured log format and packet dump
-- [`docs/isa.md`](./docs/isa.md) generated LinxISA 0.58.6 codec and `Minst`
+- [`docs/isa.md`](./docs/isa.md) generated LinxISA 0.58.7 codec and `Minst`
   packet contract
 
 Doxygen can be generated locally with:
@@ -88,16 +88,16 @@ cmake --build build --target gen-isa-codec
 cmake --build build --target check-isa-codec
 ```
 
-Generation fails closed unless the root lock matches the exact PTO ISA 0.58.6
-release, ABI, projection, source commit/tree, catalog hashes/counts, and the
-773-form codec cardinality. The freshness target regenerates into a temporary
+Generation fails closed unless the development lock matches the exact PTO ISA
+0.58.7 golden, ABI, projection, source commit/tree, catalog hashes/counts, and
+the 794-form codec cardinality. The freshness target regenerates into a temporary
 directory and byte-compares both committed outputs.
 
 For a standalone checkout, configure with an immutable LinxISA authority:
 
 ```bash
 cmake -S . -B build -G Ninja \
-  -DLINXISA_AUTHORITY_ROOT=/path/to/linx-isa-at-81bfd0e42f20f5be10af3bd3a17492d586ca42a1
+  -DLINXISA_AUTHORITY_ROOT=/path/to/linx-isa-at-f77a8960f61f97c264a90b7aee757f99891b0943
 cmake --build build --target check-isa-codec
 ```
 

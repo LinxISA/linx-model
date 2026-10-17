@@ -3,6 +3,7 @@
 #include <memory>
 #include <sstream>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include "linx/model.hpp"
@@ -267,6 +268,28 @@ int TestTileHeadersAndUnsupportedScalar() {
         std::string_view(ctx->LastCommitted()->mnemonic) != "CASB" ||
         std::string_view(ctx->LastCommitted()->opcode_class) != "atomic") {
       return 28;
+    }
+  }
+
+  constexpr std::array<std::pair<std::string_view, std::string_view>, 4> kEncodingOnlyForms{{
+      {"5af48f644596", "DMA.FREE.L"},
+      {"5de9a6bba806", "DMA.FREE.S"},
+      {"d6af61213c20", "MCOPY.DL"},
+      {"e7a90ccbe4db", "MCOPY.DS"},
+  }};
+  for (const auto &[uid, mnemonic] : kEncodingOnlyForms) {
+    const auto bytes = EncodedBytes(BuildZeroInst(uid));
+    if (bytes.empty()) {
+      return 29;
+    }
+    auto ctx = std::make_shared<ExecutionContext>();
+    ctx->LoadProgram(LoadRawBinaryImageFromBytes(bytes, "encoding-only-unsupported", 0));
+    ReferenceExecutor executor(ctx);
+    if (executor.Step() || !ctx->Terminated() || ctx->ExitCode() != 1 ||
+        ctx->LastError() != std::string("unsupported_instruction:") + std::string(mnemonic) ||
+        ctx->State().pc != 0 || !ctx->LastCommitted().has_value() ||
+        std::string_view(ctx->LastCommitted()->mnemonic) != mnemonic) {
+      return 30;
     }
   }
 

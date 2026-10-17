@@ -31,7 +31,7 @@ class GenMinstCodecTests(unittest.TestCase):
             (SUPERPROJECT_ROOT / "isa/v0.58/linxisa-v0.58.json").read_text()
         )
         self.lock = json.loads(
-            (SUPERPROJECT_ROOT / "isa/v0.58/pto-spec.lock.json").read_text()
+            (SUPERPROJECT_ROOT / "isa/v0.58/pto-scalar-proposal.lock.json").read_text()
         )
         self.release_manifest = json.loads(
             (SUPERPROJECT_ROOT / "isa/v0.58/release_manifest.json").read_text()
@@ -45,15 +45,15 @@ class GenMinstCodecTests(unittest.TestCase):
         pattern = form["encoding"]["parts"][0]["pattern"]
         replacement = "1" if pattern[0] != "1" else "0"
         form["encoding"]["parts"][0]["pattern"] = replacement + pattern[1:]
-        self.assertEqual(len(mutated["instructions"]), 773)
+        self.assertEqual(len(mutated["instructions"]), 794)
 
         with tempfile.TemporaryDirectory() as td:
             spec_path = Path(td) / "linxisa-v0.58.json"
-            lock_path = Path(td) / "pto-spec.lock.json"
+            lock_path = Path(td) / "pto-scalar-proposal.lock.json"
             manifest_path = Path(td) / "release_manifest.json"
             spec_path.write_text(json.dumps(mutated), encoding="utf-8")
             lock_path.write_text(
-                (SUPERPROJECT_ROOT / "isa/v0.58/pto-spec.lock.json").read_text(),
+                (SUPERPROJECT_ROOT / "isa/v0.58/pto-scalar-proposal.lock.json").read_text(),
                 encoding="utf-8",
             )
             manifest_path.write_text(
@@ -75,11 +75,11 @@ class GenMinstCodecTests(unittest.TestCase):
 
         with tempfile.TemporaryDirectory() as td:
             spec_path = Path(td) / "linxisa-v0.58.json"
-            lock_path = Path(td) / "pto-spec.lock.json"
+            lock_path = Path(td) / "pto-scalar-proposal.lock.json"
             manifest_path = Path(td) / "release_manifest.json"
             spec_path.write_text(json.dumps(mutated), encoding="utf-8")
             lock_path.write_bytes(
-                (SUPERPROJECT_ROOT / "isa/v0.58/pto-spec.lock.json").read_bytes()
+                (SUPERPROJECT_ROOT / "isa/v0.58/pto-scalar-proposal.lock.json").read_bytes()
             )
             manifest_path.write_bytes(
                 (SUPERPROJECT_ROOT / "isa/v0.58/release_manifest.json").read_bytes()
@@ -96,11 +96,11 @@ class GenMinstCodecTests(unittest.TestCase):
 
         with tempfile.TemporaryDirectory() as td:
             spec_path = Path(td) / "linxisa-v0.58.json"
-            lock_path = Path(td) / "pto-spec.lock.json"
+            lock_path = Path(td) / "pto-scalar-proposal.lock.json"
             manifest_path = Path(td) / "release_manifest.json"
             spec_path.write_text(json.dumps(mutated), encoding="utf-8")
             lock_path.write_bytes(
-                (SUPERPROJECT_ROOT / "isa/v0.58/pto-spec.lock.json").read_bytes()
+                (SUPERPROJECT_ROOT / "isa/v0.58/pto-scalar-proposal.lock.json").read_bytes()
             )
             manifest_path.write_bytes(
                 (SUPERPROJECT_ROOT / "isa/v0.58/release_manifest.json").read_bytes()
@@ -239,7 +239,7 @@ class GenMinstCodecTests(unittest.TestCase):
             with self.subTest(job=job_name):
                 self.assertIn("repository: LinxISA/linx-isa", body)
                 self.assertIn(
-                    "ref: ed3f7a9d9715e6209d7b551aa51865decf59e9e6", body
+                    "ref: f77a8960f61f97c264a90b7aee757f99891b0943", body
                 )
                 self.assertIn("path: linxisa-authority", body)
                 self.assertIn(
@@ -247,13 +247,13 @@ class GenMinstCodecTests(unittest.TestCase):
                     body,
                 )
 
-    def test_exact_v0586_authority_and_codec_shape_are_accepted(self) -> None:
+    def test_exact_v0587_authority_and_codec_shape_are_accepted(self) -> None:
         counts = gen_minst_codec.validate_authority(
             self.spec, self.lock, self.release_manifest
         )
         self.assertEqual(
             counts,
-            {"forms": 773, "fields": 2667, "pieces": 3399, "constraints": 1067},
+            {"forms": 794, "fields": 2718, "pieces": 3450, "constraints": 1085},
         )
         self.assertEqual(
             self.spec["semantics_conventions"]["immediate_materialization"][
@@ -294,11 +294,11 @@ class GenMinstCodecTests(unittest.TestCase):
         self.assertEqual(by_uid["c11eb189dd83"]["mnemonic"], "B.IOT")
         self.assertEqual(
             (by_uid["c11eb189dd83"]["mask"], by_uid["c11eb189dd83"]["match"]),
-            (0xFC07F07F, 0x5013),
+            (0xFC07F1FF, 0x5013),
         )
-        self.assertEqual(by_name["B.IOS"]["uid"], "4ba5ef98fdaa")
+        self.assertEqual(by_uid["4ba5ef98fdaa"]["mnemonic"], "B.IOS")
         self.assertEqual(
-            (by_name["B.IOS"]["mask"], by_name["B.IOS"]["match"]),
+            (by_uid["4ba5ef98fdaa"]["mask"], by_uid["4ba5ef98fdaa"]["match"]),
             (0xFC0871FF, 0x1013),
         )
         for retired in {"B.EQ", "B.GE", "B.GEU", "B.LT", "B.LTU", "B.NE", "B.NZ", "B.Z"}:
@@ -310,11 +310,13 @@ class GenMinstCodecTests(unittest.TestCase):
 
     def test_authority_mutations_fail_closed(self) -> None:
         mutations = [
-            ("release", lambda lock: lock.__setitem__("release", "0.58.0")),
-            ("encoding ABI", lambda lock: lock.__setitem__("encoding_abi", "wrong")),
+            ("release", lambda lock: lock["identity"].__setitem__("release", "0.58.0")),
+            ("encoding ABI", lambda lock: lock["identity"].__setitem__("encoding_abi", "wrong")),
             (
                 "projection hash",
-                lambda lock: lock.__setitem__("encoding_projection_sha256", "0" * 64),
+                lambda lock: lock["identity"].__setitem__(
+                    "encoding_projection_sha256", "0" * 64
+                ),
             ),
             (
                 "source commit",
@@ -357,7 +359,7 @@ class GenMinstCodecTests(unittest.TestCase):
                 "--spec",
                 str(SUPERPROJECT_ROOT / "isa/v0.58/linxisa-v0.58.json"),
                 "--lock",
-                str(SUPERPROJECT_ROOT / "isa/v0.58/pto-spec.lock.json"),
+                str(SUPERPROJECT_ROOT / "isa/v0.58/pto-scalar-proposal.lock.json"),
                 "--release-manifest",
                 str(SUPERPROJECT_ROOT / "isa/v0.58/release_manifest.json"),
                 "--header",

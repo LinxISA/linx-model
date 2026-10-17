@@ -225,7 +225,7 @@ int RunConstraintViolationSmoke() {
 
 int RunCoverageRoundTripSmoke() {
   const auto forms = AllMinstForms();
-  if (forms.size() != 773) {
+  if (forms.size() != 794) {
     return 20;
   }
 
@@ -262,7 +262,7 @@ int RunActiveDeltaDecodeSmoke() {
     MinstOpcodeClass opcode_class;
   };
 
-  constexpr std::array<ExpectedForm, 11> kExpectedForms = {{
+  constexpr std::array<ExpectedForm, 15> kExpectedForms = {{
       {"d5f83e5aadf6", "BSTART.TPREFETCH", MinstOpcodeClass::System},
       {"5573241cd944", "BSTART.MGATHER.MASK", MinstOpcodeClass::System},
       {"2a33eed646f7", "BSTART.MSCATTER.MASK", MinstOpcodeClass::System},
@@ -274,6 +274,10 @@ int RunActiveDeltaDecodeSmoke() {
       {"7e529b871832", "CASB", MinstOpcodeClass::Atomic},
       {"5852c57277a6", "CASD", MinstOpcodeClass::Atomic},
       {"a168aeca5fa5", "DMA", MinstOpcodeClass::Atomic},
+      {"5af48f644596", "DMA.FREE.L", MinstOpcodeClass::Atomic},
+      {"5de9a6bba806", "DMA.FREE.S", MinstOpcodeClass::Atomic},
+      {"d6af61213c20", "MCOPY.DL", MinstOpcodeClass::System},
+      {"e7a90ccbe4db", "MCOPY.DS", MinstOpcodeClass::System},
   }};
 
   for (const auto &expected : kExpectedForms) {
@@ -303,7 +307,7 @@ int RunActiveDeltaDecodeSmoke() {
     }
   }
 
-  if (AllMinstForms().size() != 773 || LookupFormByMnemonic("BSTART.CUBE") != nullptr ||
+  if (AllMinstForms().size() != 794 || LookupFormByMnemonic("BSTART.CUBE") != nullptr ||
       LookupFormByMnemonic("BSTART.TMA") != nullptr ||
       LookupFormByMnemonic("BSTART.FIXP") != nullptr || LookupFormByMnemonic("B.ARG") != nullptr ||
       LookupFormByMnemonic("C.B.IOS") != nullptr || LookupFormByMnemonic("B.EQ") != nullptr ||

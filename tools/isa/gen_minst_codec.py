@@ -11,41 +11,45 @@ import subprocess
 import tempfile
 
 
-EXPECTED_RELEASE = "0.58.6"
-EXPECTED_ENCODING_ABI = "pto-isa-0.58.6-mode-function-v1"
+EXPECTED_RELEASE = "0.58.7"
+EXPECTED_ENCODING_ABI = "pto-isa-0.58.7-mode-function-v1"
 EXPECTED_ENCODING_PROJECTION_SHA256 = (
-    "a757f2e50ec8050d2131b6b9ad38657511df80cf3f9424d5f009ea6e0cc35839"
+    "a5f78ecd707bde4a014542158ea257c783796b95fa4fbcce37742e41fee6a881"
 )
-EXPECTED_SOURCE_COMMIT = "dea0b75e803cffa873982c90f9aa0cd17c6d243b"
-EXPECTED_SOURCE_TREE = "64571b898e5acb437b93fdedb415e193bb63f60f"
+EXPECTED_SOURCE_COMMIT = "f0a876e449a95d26841c5ee7affb4c905ebc5f5b"
+EXPECTED_SOURCE_TREE = "fe9e8e050375fbce3f526d08acca13c37cd15830"
 EXPECTED_CATALOGS = {
     "command_forms": {
-        "count": 95,
-        "sha256": "013e5161bc095f59a4784f37ebbe04e332748782bdd9f540b18cd8fdc95fc7b6",
+        "count": 105,
+        "sha256": "d2817054e96456d058d88c27cef1eb034a2b164b486d5c11fe3c796f08e02f3e",
     },
     "scalar_forms": {
-        "count": 466,
-        "sha256": "659feca66ad67db81726c8e0139e614b3ced2694e645f9e5dda534832920d2dd",
+        "count": 473,
+        "sha256": "840ae680f9193ae7a9422a0e7c0e264cd61fa83429149b7b0fff77d41282627d",
     },
     "tile_operations": {
-        "count": 117,
-        "sha256": "d23530aa58afa5dbe5bee1e56366be3c5711583b69908f6af9799742c6c005e4",
+        "count": 119,
+        "sha256": "533db9b8f31f118af5978de813cfaa3fa738de820ee24655faa2ee71f343a706",
     },
     "extension_encoding_reservations": {
-        "count": 46,
-        "sha256": "3daf7bf384dc0ff64bd8374634a8b6a057eea6ca76b67b67ab0d9496471110ae",
+        "count": 50,
+        "sha256": "d34f6b560f19a531a962c6d8abf812a911e83ea57f721ef53102ed6f62c9c41c",
+    },
+    "system_registers": {
+        "count": None,
+        "sha256": "2a5d6669b95c28f80651f5917558781de25b8465655399063790e50549e1e2a9",
     },
 }
 EXPECTED_CODEC_COUNTS = {
-    "forms": 773,
-    "fields": 2667,
-    "pieces": 3399,
-    "constraints": 1067,
+    "forms": 794,
+    "fields": 2718,
+    "pieces": 3450,
+    "constraints": 1085,
 }
-EXPECTED_CATALOG_CONTENT_SHA256 = "47d7d23e210e8205fa385473136c44613bb52e8de135e77602163147f91eaf91"
-EXPECTED_LOCK_CONTENT_SHA256 = "77e792fb0add49a2cf4a0dcc6853a715d6b1c98490f48649b85f923579ba36be"
+EXPECTED_CATALOG_CONTENT_SHA256 = "51ca9be275518d29ec48bed570b7a9bd441a65b9c5e6d4f79072f650ee732925"
+EXPECTED_LOCK_CONTENT_SHA256 = "92f3ca32db8e40d3aab1dc5450ee594216c273c7923cf14b1a417d3509db4067"
 EXPECTED_RELEASE_MANIFEST_CONTENT_SHA256 = (
-    "86ad5d2dee02131bf9865ba029d8043112174f94798a5dcdb7e8f8d081415a11"
+    "873716bde4e0a58f47da8ea8ef531754e1bcc5c2a89219e9d5f4c092a3d16d75"
 )
 
 
@@ -237,11 +241,12 @@ def build_forms(spec: dict) -> tuple[list[dict], list[dict], list[dict], list[di
 
 
 def validate_authority(spec: dict, lock: dict, release_manifest: dict) -> dict[str, int]:
+    identity = lock.get("identity") or {}
     checks = [
-        (lock.get("release") == EXPECTED_RELEASE, "release mismatch"),
-        (lock.get("encoding_abi") == EXPECTED_ENCODING_ABI, "encoding ABI mismatch"),
+        (identity.get("release") == EXPECTED_RELEASE, "release mismatch"),
+        (identity.get("encoding_abi") == EXPECTED_ENCODING_ABI, "encoding ABI mismatch"),
         (
-            lock.get("encoding_projection_sha256") == EXPECTED_ENCODING_PROJECTION_SHA256,
+            identity.get("encoding_projection_sha256") == EXPECTED_ENCODING_PROJECTION_SHA256,
             "projection hash mismatch",
         ),
         (
@@ -256,7 +261,7 @@ def validate_authority(spec: dict, lock: dict, release_manifest: dict) -> dict[s
         (spec.get("instruction_count") == EXPECTED_CODEC_COUNTS["forms"], "form count mismatch"),
         (release_manifest.get("version") == EXPECTED_RELEASE, "release manifest mismatch"),
         (
-            release_manifest.get("source_lock") == "isa/v0.58/pto-spec.lock.json",
+            release_manifest.get("source_lock") == "isa/v0.58/pto-scalar-proposal.lock.json",
             "release manifest source lock mismatch",
         ),
     ]
@@ -274,10 +279,10 @@ def validate_authority(spec: dict, lock: dict, release_manifest: dict) -> dict[s
 
     cardinality = release_manifest.get("cardinality") or {}
     for name, expected in (
-        ("command_forms", 95),
-        ("scalar_forms", 466),
-        ("tile_operations", 117),
-        ("extension_encoding_reservations", 46),
+        ("command_forms", 105),
+        ("scalar_forms", 473),
+        ("tile_operations", 119),
+        ("extension_encoding_reservations", 50),
     ):
         if cardinality.get(name) != expected:
             raise ValueError(f"release manifest count mismatch: {name}")
@@ -295,7 +300,6 @@ def validate_authority(spec: dict, lock: dict, release_manifest: dict) -> dict[s
     by_name = {form["mnemonic"]: form for form in forms}
     required_forms = {
         "B.FPATR": (0x7C7F, 0x2023),
-        "B.IOS": (0xFC0871FF, 0x1013),
         "BSTART.ICALL": (0xF83FFFFF, 0x50166001),
     }
     for mnemonic, (mask, match) in required_forms.items():
@@ -303,10 +307,15 @@ def validate_authority(spec: dict, lock: dict, release_manifest: dict) -> dict[s
         if form is None or (form["mask"], form["match"]) != (mask, match):
             raise ValueError(f"required form mismatch: {mnemonic}")
     by_uid = {form["uid"]: form for form in forms}
+    bios = by_uid.get("4ba5ef98fdaa")
+    if bios is None or bios["mnemonic"] != "B.IOS" or (
+        bios["mask"], bios["match"]
+    ) != (0xFC0871FF, 0x1013):
+        raise ValueError("required form mismatch: B.IOS")
     biot = by_uid.get("c11eb189dd83")
     if biot is None or biot["mnemonic"] != "B.IOT" or (
         biot["mask"], biot["match"]
-    ) != (0xFC07F07F, 0x5013):
+    ) != (0xFC07F1FF, 0x5013):
         raise ValueError("required form mismatch: B.IOT")
     return counts
 
@@ -504,7 +513,11 @@ def main() -> int:
             "error: authority file is missing; set --authority-root or LINXISA_AUTHORITY_ROOT"
         )
     spec_path = Path(args.spec) if args.spec else authority_root / "isa/v0.58/linxisa-v0.58.json"
-    lock_path = Path(args.lock) if args.lock else authority_root / "isa/v0.58/pto-spec.lock.json"
+    lock_path = (
+        Path(args.lock)
+        if args.lock
+        else authority_root / "isa/v0.58/pto-scalar-proposal.lock.json"
+    )
     release_manifest_path = (
         Path(args.release_manifest)
         if args.release_manifest

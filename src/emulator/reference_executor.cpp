@@ -115,7 +115,9 @@ bool IsTileHeader(const isa::Minst &inst) {
 
 bool IsUnsupportedScalar(const isa::Minst &inst) {
   return inst.mnemonic == "CASB" || inst.mnemonic == "CASH" || inst.mnemonic == "CASW" ||
-         inst.mnemonic == "CASD" || inst.mnemonic == "DMA";
+         inst.mnemonic == "CASD" || inst.mnemonic == "DMA" || inst.mnemonic == "DMA.FREE.L" ||
+         inst.mnemonic == "DMA.FREE.S" || inst.mnemonic == "MCOPY.DL" ||
+         inst.mnemonic == "MCOPY.DS";
 }
 
 } // namespace
@@ -352,8 +354,7 @@ void ReferenceExecutor::Execute(isa::Minst &inst) {
     std::strncpy(commit_record.block_kind, header_block_kind.c_str(),
                  sizeof(commit_record.block_kind) - 1U);
   } else if (IsUnsupportedScalar(inst)) {
-    inst.annotation = "scalar AMO decoded; reference executor semantics are not implemented";
-    state.pc = inst.next_pc;
+    inst.annotation = "instruction decoded; reference executor semantics are not implemented";
     ctx.RequestTerminate(1, std::string("unsupported_instruction:") + std::string(inst.mnemonic));
   } else {
     state.pc = inst.next_pc;
