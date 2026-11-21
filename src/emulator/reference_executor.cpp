@@ -110,6 +110,9 @@ bool IsImplemented(const isa::Minst &inst) {
          inst.mnemonic == "MSET" || IsTileHeader(inst) || inst.mnemonic == "B.TEXT";
 }
 
+enum class ScopedRegisterField : std::uint8_t { None, RegDst, SrcL, SrcR, SrcD };
+enum class ScopedImmediateField : std::uint8_t { Simm, Simm12, Simm17, Simm22 };
+
 struct ScopedSingleAccessForm {
   std::string_view uid;
   bool is_load;
@@ -117,6 +120,9 @@ struct ScopedSingleAccessForm {
   std::uint8_t offset_scale;
   std::uint8_t size;
   bool signed_load;
+  ScopedRegisterField base_field;
+  ScopedRegisterField value_field;
+  ScopedImmediateField immediate_field;
 };
 
 #include "pto_scoped_scalar_runtime.inc"
@@ -127,6 +133,36 @@ const ScopedSingleAccessForm *LookupScopedSingleAccess(std::string_view uid) {
       std::begin(kScopedSingleAccessForms), std::end(kScopedSingleAccessForms), uid,
       [](const ScopedSingleAccessForm &form, std::string_view key) { return form.uid < key; });
   return it != std::end(kScopedSingleAccessForms) && it->uid == uid ? &*it : nullptr;
+}
+
+std::string_view FieldName(ScopedRegisterField field) {
+  switch (field) {
+  case ScopedRegisterField::RegDst:
+    return "RegDst";
+  case ScopedRegisterField::SrcL:
+    return "SrcL";
+  case ScopedRegisterField::SrcR:
+    return "SrcR";
+  case ScopedRegisterField::SrcD:
+    return "SrcD";
+  case ScopedRegisterField::None:
+    return {};
+  }
+  return {};
+}
+
+std::string_view FieldName(ScopedImmediateField field) {
+  switch (field) {
+  case ScopedImmediateField::Simm:
+    return "simm";
+  case ScopedImmediateField::Simm12:
+    return "simm12";
+  case ScopedImmediateField::Simm17:
+    return "simm17";
+  case ScopedImmediateField::Simm22:
+    return "simm22";
+  }
+  return {};
 }
 
 std::optional<std::uint64_t> ReadMemoryValue(const ExecutionContext &ctx, std::uint64_t address,
@@ -286,15 +322,16 @@ void ReferenceExecutor::Execute(isa::Minst &inst,
       return;
     }
     const auto current_pc = state.pc;
-    const auto immediate = GetSignedAny(inst, {"simm", "simm12", "simm17", "simm22"});
-    if (!immediate.has_value()) {
+    const auto immediate = inst.GetFieldSigned(FieldName(form->immediate_field));
+    const auto value_register = inst.GetFieldUnsigned(FieldName(form->value_field));
+    const auto base_register = form->base_field == ScopedRegisterField::None
+                                   ? std::optional<std::uint64_t>{0}
+                                   : inst.GetFieldUnsigned(FieldName(form->base_field));
+    if (!immediate.has_value() || !value_register.has_value() || !base_register.has_value()) {
       ctx.RequestTerminate(1, "scoped_operand_decode_failed");
       return;
     }
-    const auto base =
-        form->is_pcr
-            ? current_pc & ~UINT64_C(3)
-            : ReadGpr(state, GetUnsignedAny(inst, {form->is_load ? "SrcL" : "SrcR"}).value_or(0));
+    const auto base = form->is_pcr ? current_pc & ~UINT64_C(3) : ReadGpr(state, *base_register);
     const auto offset = static_cast<std::uint64_t>(*immediate) << form->offset_scale;
     const auto address = base + offset;
     ScopedMemoryRequest request{
@@ -332,8 +369,7 @@ void ReferenceExecutor::Execute(isa::Minst &inst,
         return;
       }
       const auto value = NormalizeLoad(*raw_value, form->size, form->signed_load);
-      const auto destination = GetUnsignedAny(inst, {"RegDst"}).value_or(0);
-      WriteScalarDestination(state, destination, value);
+      WriteScalarDestination(state, *value_register, value);
       request.value = *raw_value;
       commit_record.dst0.data = value;
       commit_record.memory.valid = 1;
@@ -342,8 +378,7 @@ void ReferenceExecutor::Execute(isa::Minst &inst,
       commit_record.memory.size = form->size;
       commit_record.memory.rdata = value;
     } else {
-      const auto source_name = inst.GetFieldUnsigned("SrcD").has_value() ? "SrcD" : "SrcL";
-      const auto value = ReadGpr(state, GetUnsignedAny(inst, {source_name}).value_or(0));
+      const auto value = ReadGpr(state, *value_register);
       const auto mask = form->size == 8 ? std::numeric_limits<std::uint64_t>::max()
                                         : (UINT64_C(1) << (form->size * 8U)) - 1U;
       request.value = value & mask;
@@ -363,6 +398,11 @@ void ReferenceExecutor::Execute(isa::Minst &inst,
     inst.MarkRetired();
     std::strncpy(commit_record.lifecycle, "retired", sizeof(commit_record.lifecycle) - 1U);
     ctx.AppendRecord(commit_record);
+    return;
+  }
+  if (inst.mnemonic == "SDI" && !options_.enable_pto_scoped_scalar) {
+    inst.annotation = "instruction decoded; reference executor semantics are not implemented";
+    ctx.RequestTerminate(1, "unsupported_instruction:SDI");
     return;
   }
   if (!IsImplemented(inst)) {

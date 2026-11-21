@@ -429,16 +429,28 @@ int TestReferenceExecutorSdiContract() {
   if (bytes.size() != 4) {
     return 64;
   }
+  {
+    auto ctx = std::make_shared<ExecutionContext>();
+    ctx->LoadProgram(LoadRawBinaryImageFromBytes(bytes, "sdi-disabled", 0));
+    ctx->State().gpr[3] = 0x1122334455667788ULL;
+    ctx->State().gpr[4] = 0x2000;
+    ReferenceExecutor executor(ctx);
+    if (executor.Step() || !ctx->Terminated() ||
+        ctx->LastError() != "unsupported_instruction:SDI" || ctx->Read64(0x2008).has_value() ||
+        ctx->State().pc != 0 || ctx->State().insn_count != 0 || ctx->LastCommitted().has_value()) {
+      return 65;
+    }
+  }
   auto ctx = std::make_shared<ExecutionContext>();
   ctx->LoadProgram(LoadRawBinaryImageFromBytes(bytes, "sdi-contract", 0));
   ctx->State().gpr[3] = 0x1122334455667788ULL;
   ctx->State().gpr[4] = 0x2000;
-  ReferenceExecutor executor(ctx);
+  ReferenceExecutor executor(ctx, ReferenceExecutorOptions{.enable_pto_scoped_scalar = true});
   if (!executor.Step() || ctx->Terminated() || ctx->Read64(0x2008) != 0x1122334455667788ULL ||
       !ctx->LastCommitted().has_value() || ctx->LastCommitted()->memory.addr != 0x2008 ||
       ctx->LastCommitted()->memory.size != 8 ||
       ctx->LastCommitted()->memory.wdata != 0x1122334455667788ULL) {
-    return 65;
+    return 66;
   }
   return 0;
 }
