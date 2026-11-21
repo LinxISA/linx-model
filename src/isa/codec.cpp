@@ -217,7 +217,8 @@ MinstCodecStatus DecodePtoScopedScalar(std::uint64_t wire_bits, PtoScopedScalar 
   if (status != MinstCodecStatus::Ok) {
     return status;
   }
-  if (!std::binary_search(std::begin(kScopedInnerUids), std::end(kScopedInnerUids), inner.form_id)) {
+  if (!std::binary_search(std::begin(kScopedInnerUids), std::end(kScopedInnerUids),
+                          inner.form_id)) {
     return MinstCodecStatus::NoMatch;
   }
   out.wire_bits = wire_bits;

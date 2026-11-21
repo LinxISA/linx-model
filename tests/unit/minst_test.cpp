@@ -53,9 +53,11 @@ int RunPtoScopedScalarSmoke() {
       return 1;
     }
   }
-  for (const auto rejected : {0x00000000001a101fULL, 0x00000000001a031fULL, 0x00000000001a0c1fULL,
-                              0x00000001001a001fULL, 0x00000000700b041fULL, 0x06000009003e081fULL}) {
-    if (DecodePtoScopedScalar(rejected, decoded) == MinstCodecStatus::Ok || decoded.inner.valid_form) {
+  for (const auto rejected :
+       {0x00000000001a101fULL, 0x00000000001a031fULL, 0x00000000001a0c1fULL, 0x00000001001a001fULL,
+        0x00000000700b041fULL, 0x06000009003e081fULL}) {
+    if (DecodePtoScopedScalar(rejected, decoded) == MinstCodecStatus::Ok ||
+        decoded.inner.valid_form) {
       return 2;
     }
   }
