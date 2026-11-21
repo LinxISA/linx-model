@@ -68,6 +68,16 @@ add_custom_target(
   WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
   COMMENT "Checking committed LinxISA 0.58.7 Minst codec freshness")
 
+if(LINXISA_AUTHORITY_ROOT)
+  add_custom_target(
+    check-pto-scoped-codec
+    COMMAND "${Python3_EXECUTABLE}" -B
+            "${CMAKE_CURRENT_SOURCE_DIR}/tools/isa/gen_pto_scoped_scalar.py"
+            ${LINXISA_AUTHORITY_ARGS} --check
+    WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
+    COMMENT "Checking locked PTO 0.59.1 scoped Scalar bindings and witnesses")
+endif()
+
 target_include_directories(
   linx_model
   PUBLIC

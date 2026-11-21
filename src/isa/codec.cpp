@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <limits>
 #include <optional>
+#include <utility>
 
 #include "linx/model/isa/generated_tables.hpp"
 
@@ -15,6 +16,8 @@ using generated::kFieldPieces;
 using generated::kFields;
 using generated::kFormCount;
 using generated::kForms;
+
+#include "pto_scoped_scalar_uids.inc"
 
 [[nodiscard]] std::uint64_t BitMask(std::uint16_t width) noexcept {
   if (width == 0) {
@@ -193,6 +196,35 @@ using generated::kForms;
 }
 
 } // namespace
+
+MinstCodecStatus DecodePtoScopedScalar(std::uint64_t wire_bits, PtoScopedScalar &out) noexcept {
+  out = {};
+  if ((wire_bits & 0xf0ff) != 0x001f) {
+    return MinstCodecStatus::NoMatch;
+  }
+  const auto scope = (wire_bits >> 8) & 3;
+  const auto length_code = (wire_bits >> 10) & 3;
+  if (scope == 3 || length_code == 3) {
+    return MinstCodecStatus::NoMatch;
+  }
+  const int inner_length = (static_cast<int>(length_code) + 1) * 16;
+  const std::uint64_t payload = wire_bits >> 16;
+  if ((payload >> inner_length) != 0) {
+    return MinstCodecStatus::NoMatch;
+  }
+  Minst inner;
+  const auto status = DecodeMinstPacked(payload, inner_length, inner);
+  if (status != MinstCodecStatus::Ok) {
+    return status;
+  }
+  if (!std::binary_search(std::begin(kScopedInnerUids), std::end(kScopedInnerUids), inner.form_id)) {
+    return MinstCodecStatus::NoMatch;
+  }
+  out.wire_bits = wire_bits;
+  out.shareability = static_cast<PtoScalarShareability>(scope);
+  out.inner = std::move(inner);
+  return MinstCodecStatus::Ok;
+}
 
 std::string_view ToString(MinstConstraintOp op) noexcept {
   switch (op) {

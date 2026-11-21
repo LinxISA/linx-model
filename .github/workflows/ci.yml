@@ -91,6 +91,14 @@ jobs:
         run: cmake --build build-system
       - name: Check committed codec freshness against immutable authority
         run: cmake --build build-system --target check-isa-codec
+      - name: Check out LinxISA's released PTO 0.59.1 import
+        uses: actions/checkout@v4
+        with:
+          repository: LinxISA/linx-isa
+          ref: 2a29daf7ed6ea33c1719c27abd1ac48d2e75b1cd
+          path: linxisa-pto-v0591-authority
+      - name: Check scoped Scalar bindings against the released import
+        run: python3 -B tools/isa/gen_pto_scoped_scalar.py --authority-root linxisa-pto-v0591-authority --check
       - name: Run system and checks tests
         run: |
           ctest --test-dir build-system --output-on-failure -L system

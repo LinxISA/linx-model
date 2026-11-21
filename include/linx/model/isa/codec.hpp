@@ -67,6 +67,18 @@ struct MinstFormDesc {
 ConstraintsFor(const MinstFormDesc &form) noexcept;
 [[nodiscard]] std::span<const MinstFieldPieceDesc> PiecesFor(const MinstFieldDesc &field) noexcept;
 
+enum class PtoScalarShareability : std::uint8_t { Private, IntraCore, InterCore };
+
+struct PtoScopedScalar {
+  static constexpr std::uint8_t CodeBytes = 8;
+  std::uint64_t wire_bits = 0;
+  PtoScalarShareability shareability = PtoScalarShareability::Private;
+  Minst inner;
+};
+
+// The carrier is in stream order, with the first halfword in bits 15:0.
+MinstCodecStatus DecodePtoScopedScalar(std::uint64_t wire_bits, PtoScopedScalar &out) noexcept;
+
 MinstCodecStatus DecodeMinst(std::uint64_t raw_lo, std::uint64_t raw_hi_or_packed, int length_bits,
                              Minst &out) noexcept;
 MinstCodecStatus DecodeMinstPacked(std::uint64_t packed_bits, int length_bits, Minst &out) noexcept;

@@ -88,6 +88,15 @@ cmake --build build --target gen-isa-codec
 cmake --build build --target check-isa-codec
 ```
 
+The PTO 0.59.1 compatibility API `isa::DecodePtoScopedScalar` accepts a
+stream-order 64-bit carrier and returns the explicit shareability value and
+decoded inner form. `PtoScopedScalar::CodeBytes` identifies the full carrier
+size for callers. The standard Minst codec and executor still select the
+active v0.58 profile. The unit suite checks all 705 released carrier witnesses.
+With `LINXISA_AUTHORITY_ROOT` set to a checkout containing the imported release,
+run `cmake --build build --target check-pto-scoped-codec` to check the generated
+bindings and witnesses.
+
 Generation fails closed unless the development lock matches the exact PTO ISA
 0.58.7 golden, ABI, projection, source commit/tree, catalog hashes/counts, and
 the 794-form codec cardinality. The freshness target regenerates into a temporary
