@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cstring>
+#include <limits>
 #include <string>
 
 namespace linx::model::emulator {
@@ -104,14 +105,132 @@ bool IsImplemented(const isa::Minst &inst) {
          inst.mnemonic == "C.BSTOP" || inst.mnemonic == "C.MOVI" || inst.mnemonic == "C.MOVR" ||
          inst.mnemonic == "LUI" || inst.mnemonic == "HL.LUI" || inst.mnemonic == "HL.LIU" ||
          inst.mnemonic == "HL.LIS" || inst.mnemonic == "ADDI" || inst.mnemonic == "LWI" ||
-         inst.mnemonic == "SWI" || inst.mnemonic == "SETC.NE" || inst.mnemonic == "SETC.LTU" ||
-         inst.mnemonic == "SSRSET" || inst.mnemonic == "MCOPY" || inst.mnemonic == "MSET" ||
-         IsTileHeader(inst) || inst.mnemonic == "B.TEXT";
+         inst.mnemonic == "SWI" || inst.mnemonic == "SDI" || inst.mnemonic == "SETC.NE" ||
+         inst.mnemonic == "SETC.LTU" || inst.mnemonic == "SSRSET" || inst.mnemonic == "MCOPY" ||
+         inst.mnemonic == "MSET" || IsTileHeader(inst) || inst.mnemonic == "B.TEXT";
+}
+
+enum class ScopedRegisterField : std::uint8_t { None, RegDst, SrcL, SrcR, SrcD };
+enum class ScopedImmediateField : std::uint8_t { Simm, Simm12, Simm17, Simm22 };
+
+struct ScopedSingleAccessForm {
+  std::string_view uid;
+  bool is_load;
+  bool is_pcr;
+  std::uint8_t offset_scale;
+  std::uint8_t size;
+  bool signed_load;
+  ScopedRegisterField base_field;
+  ScopedRegisterField value_field;
+  ScopedImmediateField immediate_field;
+};
+
+#include "pto_scoped_scalar_runtime.inc"
+static_assert(std::size(kScopedSingleAccessForms) == 60);
+
+const ScopedSingleAccessForm *LookupScopedSingleAccess(std::string_view uid) {
+  const auto it = std::lower_bound(
+      std::begin(kScopedSingleAccessForms), std::end(kScopedSingleAccessForms), uid,
+      [](const ScopedSingleAccessForm &form, std::string_view key) { return form.uid < key; });
+  return it != std::end(kScopedSingleAccessForms) && it->uid == uid ? &*it : nullptr;
+}
+
+std::string_view FieldName(ScopedRegisterField field) {
+  switch (field) {
+  case ScopedRegisterField::RegDst:
+    return "RegDst";
+  case ScopedRegisterField::SrcL:
+    return "SrcL";
+  case ScopedRegisterField::SrcR:
+    return "SrcR";
+  case ScopedRegisterField::SrcD:
+    return "SrcD";
+  case ScopedRegisterField::None:
+    return {};
+  }
+  return {};
+}
+
+std::string_view FieldName(ScopedImmediateField field) {
+  switch (field) {
+  case ScopedImmediateField::Simm:
+    return "simm";
+  case ScopedImmediateField::Simm12:
+    return "simm12";
+  case ScopedImmediateField::Simm17:
+    return "simm17";
+  case ScopedImmediateField::Simm22:
+    return "simm22";
+  }
+  return {};
+}
+
+std::optional<std::uint64_t> ReadMemoryValue(const ExecutionContext &ctx, std::uint64_t address,
+                                             std::uint8_t size) {
+  switch (size) {
+  case 1:
+    return ctx.Read8(address);
+  case 2:
+    return ctx.Read16(address);
+  case 4:
+    return ctx.Read32(address);
+  case 8:
+    return ctx.Read64(address);
+  default:
+    return std::nullopt;
+  }
+}
+
+void WriteMemoryValue(ExecutionContext &ctx, std::uint64_t address, std::uint8_t size,
+                      std::uint64_t value) {
+  switch (size) {
+  case 1:
+    ctx.Write8(address, static_cast<std::uint8_t>(value));
+    break;
+  case 2:
+    ctx.Write8(address, static_cast<std::uint8_t>(value));
+    ctx.Write8(address + 1U, static_cast<std::uint8_t>(value >> 8U));
+    break;
+  case 4:
+    ctx.Write32(address, static_cast<std::uint32_t>(value));
+    break;
+  case 8:
+    ctx.Write64(address, value);
+    break;
+  default:
+    LINX_MODEL_ASSERT_MSG(false, "invalid scoped Scalar access size");
+  }
+}
+
+std::uint64_t NormalizeLoad(std::uint64_t value, std::uint8_t size, bool signed_load) {
+  if (!signed_load) {
+    switch (size) {
+    case 1:
+      return static_cast<std::uint8_t>(value);
+    case 2:
+      return static_cast<std::uint16_t>(value);
+    case 4:
+      return static_cast<std::uint32_t>(value);
+    default:
+      return value;
+    }
+  }
+  switch (size) {
+  case 1:
+    return static_cast<std::uint64_t>(static_cast<std::int64_t>(static_cast<std::int8_t>(value)));
+  case 2:
+    return static_cast<std::uint64_t>(static_cast<std::int64_t>(static_cast<std::int16_t>(value)));
+  case 4:
+    return static_cast<std::uint64_t>(static_cast<std::int64_t>(static_cast<std::int32_t>(value)));
+  default:
+    return value;
+  }
 }
 
 } // namespace
 
-std::optional<isa::Minst> ReferenceExecutor::FetchDecode() const {
+std::optional<isa::Minst>
+ReferenceExecutor::FetchDecode(std::optional<isa::PtoScalarShareability> &shareability) const {
   const auto &ctx = *ctx_;
   const auto &state = ctx.State();
   const auto hw = ctx.Read16(state.pc);
@@ -128,6 +247,23 @@ std::optional<isa::Minst> ReferenceExecutor::FetchDecode() const {
       return std::nullopt;
     }
     packed |= static_cast<std::uint64_t>(*byte) << (idx * 8U);
+  }
+
+  shareability.reset();
+  if (len == isa::PtoScopedScalar::CodeBytes && options_.enable_pto_scoped_scalar) {
+    isa::PtoScopedScalar scoped;
+    if (isa::DecodePtoScopedScalar(packed, scoped) == isa::MinstCodecStatus::Ok) {
+      scoped.inner.uid = state.insn_count + 1U;
+      scoped.inner.fetch_seq = state.insn_count + 1U;
+      scoped.inner.pc = state.pc;
+      scoped.inner.next_pc = state.pc + isa::PtoScopedScalar::CodeBytes;
+      scoped.inner.raw_bits = packed;
+      scoped.inner.length_bits = 64;
+      scoped.inner.code_bytes = isa::PtoScopedScalar::CodeBytes;
+      scoped.inner.MarkStage(isa::MinstStage::Decode);
+      shareability = scoped.shareability;
+      return std::move(scoped.inner);
+    }
   }
 
   isa::Minst inst = *isa::Minst::CreateFetch(state.insn_count + 1U, state.pc, packed, len);
@@ -149,12 +285,13 @@ bool ReferenceExecutor::Step(std::optional<std::uint64_t> stop_pc) {
     return false;
   }
 
-  auto inst = FetchDecode();
+  std::optional<isa::PtoScalarShareability> shareability;
+  auto inst = FetchDecode(shareability);
   if (!inst.has_value()) {
     ctx.RequestTerminate(1, "fetch_decode_failed");
     return false;
   }
-  Execute(*inst);
+  Execute(*inst, shareability);
   ctx.AdvanceCycle();
   return !ctx.Terminated();
 }
@@ -173,9 +310,101 @@ void ReferenceExecutor::Run(std::optional<std::uint64_t> stop_pc,
   }
 }
 
-void ReferenceExecutor::Execute(isa::Minst &inst) {
+void ReferenceExecutor::Execute(isa::Minst &inst,
+                                std::optional<isa::PtoScalarShareability> shareability) {
   auto &ctx = *ctx_;
   auto &state = ctx.State();
+  if (shareability.has_value()) {
+    const auto *form = LookupScopedSingleAccess(inst.form_id);
+    if (form == nullptr) {
+      ctx.RequestTerminate(1, std::string("unsupported_scoped_instruction:") +
+                                  std::string(inst.mnemonic));
+      return;
+    }
+    const auto current_pc = state.pc;
+    const auto immediate = inst.GetFieldSigned(FieldName(form->immediate_field));
+    const auto value_register = inst.GetFieldUnsigned(FieldName(form->value_field));
+    const auto base_register = form->base_field == ScopedRegisterField::None
+                                   ? std::optional<std::uint64_t>{0}
+                                   : inst.GetFieldUnsigned(FieldName(form->base_field));
+    if (!immediate.has_value() || !value_register.has_value() || !base_register.has_value()) {
+      ctx.RequestTerminate(1, "scoped_operand_decode_failed");
+      return;
+    }
+    const auto base = form->is_pcr ? current_pc & ~UINT64_C(3) : ReadGpr(state, *base_register);
+    const auto offset = static_cast<std::uint64_t>(*immediate) << form->offset_scale;
+    const auto address = base + offset;
+    ScopedMemoryRequest request{
+        .shareability = *shareability,
+        .status = ScopedMemoryAccessStatus::AccessFault,
+        .source_pc = current_pc,
+        .wire_bits = inst.raw_bits,
+        .address = address,
+        .value = 0,
+        .size = form->size,
+        .is_load = form->is_load,
+        .is_store = !form->is_load,
+    };
+    const bool range_wraps =
+        form->size == 0 || address > std::numeric_limits<std::uint64_t>::max() - (form->size - 1U);
+    if (range_wraps) {
+      ctx.RecordScopedMemoryRequest(request);
+      ctx.RequestTerminate(1, "scoped_memory_access_fault");
+      return;
+    }
+    if (address % form->size != 0) {
+      request.status = ScopedMemoryAccessStatus::AlignmentFault;
+      ctx.RecordScopedMemoryRequest(request);
+      ctx.RequestTerminate(1, "scoped_memory_alignment_fault");
+      return;
+    }
+
+    auto commit_record = MakeMinstRecord(inst, ctx.Cycle(), ResolveBlockKind(inst, state),
+                                         ResolveLaneId(ResolveBlockKind(inst, state)));
+    if (form->is_load) {
+      const auto raw_value = ReadMemoryValue(ctx, address, form->size);
+      if (!raw_value.has_value()) {
+        ctx.RecordScopedMemoryRequest(request);
+        ctx.RequestTerminate(1, "scoped_memory_access_fault");
+        return;
+      }
+      const auto value = NormalizeLoad(*raw_value, form->size, form->signed_load);
+      WriteScalarDestination(state, *value_register, value);
+      request.value = *raw_value;
+      commit_record.dst0.data = value;
+      commit_record.memory.valid = 1;
+      commit_record.memory.is_load = 1;
+      commit_record.memory.addr = address;
+      commit_record.memory.size = form->size;
+      commit_record.memory.rdata = value;
+    } else {
+      const auto value = ReadGpr(state, *value_register);
+      const auto mask = form->size == 8 ? std::numeric_limits<std::uint64_t>::max()
+                                        : (UINT64_C(1) << (form->size * 8U)) - 1U;
+      request.value = value & mask;
+      WriteMemoryValue(ctx, address, form->size, request.value);
+      commit_record.memory.valid = 1;
+      commit_record.memory.is_store = 1;
+      commit_record.memory.addr = address;
+      commit_record.memory.size = form->size;
+      commit_record.memory.wdata = request.value;
+    }
+    request.status = ScopedMemoryAccessStatus::Committed;
+    ctx.RecordScopedMemoryRequest(request);
+    state.insn_pc_next = current_pc + isa::PtoScopedScalar::CodeBytes;
+    ++state.insn_count;
+    state.pc = state.insn_pc_next;
+    inst.next_pc = state.pc;
+    inst.MarkRetired();
+    std::strncpy(commit_record.lifecycle, "retired", sizeof(commit_record.lifecycle) - 1U);
+    ctx.AppendRecord(commit_record);
+    return;
+  }
+  if (inst.mnemonic == "SDI" && !options_.enable_pto_scoped_scalar) {
+    inst.annotation = "instruction decoded; reference executor semantics are not implemented";
+    ctx.RequestTerminate(1, "unsupported_instruction:SDI");
+    return;
+  }
   if (!IsImplemented(inst)) {
     inst.annotation = "instruction decoded; reference executor semantics are not implemented";
     ctx.RequestTerminate(1, std::string("unsupported_instruction:") + std::string(inst.mnemonic));
@@ -310,6 +539,18 @@ void ReferenceExecutor::Execute(isa::Minst &inst) {
     commit_record.memory.addr = addr;
     commit_record.memory.size = 4;
     commit_record.memory.wdata = static_cast<std::uint32_t>(value);
+    state.pc = inst.next_pc;
+  } else if (inst.mnemonic == "SDI") {
+    const auto value = ReadGpr(state, GetUnsignedAny(inst, {"SrcL"}).value_or(0));
+    const auto base = ReadGpr(state, GetUnsignedAny(inst, {"SrcR"}).value_or(0));
+    const auto off = static_cast<std::uint64_t>(GetSignedAny(inst, {"simm12"}).value_or(0)) * 8U;
+    const auto addr = base + off;
+    ctx.Write64(addr, value);
+    commit_record.memory.valid = 1;
+    commit_record.memory.is_store = 1;
+    commit_record.memory.addr = addr;
+    commit_record.memory.size = 8;
+    commit_record.memory.wdata = value;
     state.pc = inst.next_pc;
   } else if (inst.mnemonic == "SETC.NE") {
     const auto lhs = ReadGpr(state, inst.srcs.empty() ? 0 : inst.srcs.front().value);

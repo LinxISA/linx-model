@@ -91,16 +91,34 @@ cmake --build build --target check-isa-codec
 The PTO 0.59.1 compatibility API `isa::DecodePtoScopedScalar` accepts a
 stream-order 64-bit carrier and returns the explicit shareability value and
 decoded inner form. `PtoScopedScalar::CodeBytes` identifies the full carrier
-size for callers. The standard Minst codec and executor still select the
-active v0.58 profile. The unit suite checks all 705 released carrier witnesses.
+size for callers. The default Minst executor still selects the active v0.58
+profile. `ReferenceExecutorOptions::enable_pto_scoped_scalar` explicitly
+enables the candidate reference path for the 60 immediate and PC-relative
+single-access forms without writeback. Each actual memory request records the
+outer TPC, complete carrier, scope, address, size, direction, value, and result.
+Successful execution retires eight bytes. Alignment and missing-memory load
+faults preserve the outer PC, destination state, and retirement count. This
+single-context reference path records scope for comparison. Cross-agent
+visibility and coherence remain a platform integration responsibility.
+The unit suite checks all 705 released carrier witnesses.
+
+The CLI exposes the same capability for raw images and ELF `PT_LOAD` images.
+
+```bash
+./build/linx_model_cli --engine ref --enable-pto-v0591-scoped --bin program.elf
+```
+
+The current loader admits ELF load segments without interpreting
+`.note.pto.isa`. Release orchestration must therefore verify the exact 0.59.1
+note before invoking this opt-in path.
 With `LINXISA_AUTHORITY_ROOT` set to a checkout containing the imported release,
 run `cmake --build build --target check-pto-scoped-codec` to check the generated
-bindings and witnesses.
+bindings, witnesses, and reference-runtime form table.
 
 Generation fails closed unless the development lock matches the exact PTO ISA
 0.58.7 golden, ABI, projection, source commit/tree, catalog hashes/counts, and
 the 794-form codec cardinality. The freshness target regenerates into a temporary
-directory and byte-compares both committed outputs.
+directory and byte-compares every committed output.
 
 For a standalone checkout, configure with an immutable LinxISA authority:
 

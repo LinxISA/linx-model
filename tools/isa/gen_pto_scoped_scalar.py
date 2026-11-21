@@ -15,6 +15,47 @@ ROOT = Path(__file__).resolve().parents[2]
 SCOPED_SOURCE_SHA256 = "0f9ab05d6a7547d970b8f2a21b158a5b993527df42445ab494ed8acea0462c16"
 
 
+def runtime_binding(row: dict, uid: str) -> tuple[str, bool, bool, int, int, bool, str, str, str] | None:
+    agu = row.get("agu", {})
+    if (
+        agu.get("action") not in {"Load", "Store"}
+        or agu.get("address_kind") not in {"Immediate", "PCRelative"}
+        or agu.get("update_mode") != "None"
+    ):
+        return None
+    is_load = agu["action"] == "Load"
+    is_pcr = agu["address_kind"] == "PCRelative"
+    names = {field["name"] for field in row["fields"]}
+    immediate = [name for name in names if name in {"simm", "simm12", "simm17", "simm22"}]
+    if len(immediate) != 1:
+        raise ValueError(f"expected one signed immediate field for {row['form_id']}")
+    base_field = "None" if is_pcr else ("SrcL" if is_load else "SrcR")
+    if is_load:
+        value_field = "RegDst"
+    elif is_pcr:
+        value_field = "SrcL"
+    else:
+        value_field = "SrcD" if "SrcD" in names else "SrcL"
+    expected = {immediate[0], value_field}
+    if base_field != "None":
+        expected.add(base_field)
+    if names != expected:
+        raise ValueError(
+            f"unexpected runtime field set for {row['form_id']}: {sorted(names)} != {sorted(expected)}"
+        )
+    return (
+        uid,
+        is_load,
+        is_pcr,
+        agu["offset_scale"],
+        agu["size_bytes"],
+        agu["signed_load"],
+        base_field,
+        value_field,
+        immediate[0],
+    )
+
+
 def read_locked(path: Path, expected: str) -> dict:
     data = path.read_bytes()
     if hashlib.sha256(data).hexdigest() != expected:
@@ -22,7 +63,7 @@ def read_locked(path: Path, expected: str) -> dict:
     return json.loads(data)
 
 
-def build(authority: Path) -> tuple[str, str]:
+def build(authority: Path) -> tuple[str, str, str]:
     base = read_locked(authority / "isa/v0.58/linxisa-v0.58.json", EXPECTED_CATALOG_CONTENT_SHA256)
     source = read_locked(authority / "isa/v0.59/state/pto_scalar_forms.json", SCOPED_SOURCE_SHA256)
     forms = {
@@ -51,7 +92,25 @@ def build(authority: Path) -> tuple[str, str]:
             f'    {{0x{word:016x}ULL, "{trace_uid_for(inner)}", {row["scope_code"]}, {inner["length_bits"]}}},'
         )
     tests.append("};")
-    return "\n".join(table) + "\n", "\n".join(tests) + "\n"
+    eligible = []
+    scalar_forms = {row["form_id"]: row for row in source["forms"]}
+    for identity in sorted({row["base_form_id"] for row in variants}):
+        row = scalar_forms[identity]
+        inner = forms[identity]
+        binding = runtime_binding(row, trace_uid_for(inner))
+        if binding is not None:
+            eligible.append(binding)
+    if len(eligible) != 60:
+        raise ValueError(f"expected 60 scoped immediate/PCR single-access forms, found {len(eligible)}")
+    runtime = [prefix, "constexpr ScopedSingleAccessForm kScopedSingleAccessForms[] = {"]
+    runtime.extend(
+        f'    {{"{uid}", {str(load).lower()}, {str(pcr).lower()}, {scale}, {size}, '
+        f'{str(signed).lower()}, ScopedRegisterField::{base}, ScopedRegisterField::{value}, '
+        f'ScopedImmediateField::{immediate[0].upper()}{immediate[1:]}}},'
+        for uid, load, pcr, scale, size, signed, base, value, immediate in sorted(eligible)
+    )
+    runtime.append("};")
+    return "\n".join(table) + "\n", "\n".join(tests) + "\n", "\n".join(runtime) + "\n"
 
 
 def main() -> int:
@@ -59,7 +118,11 @@ def main() -> int:
     parser.add_argument("--authority-root", type=Path, required=True)
     parser.add_argument("--check", action="store_true")
     args = parser.parse_args()
-    paths = ("src/isa/pto_scoped_scalar_uids.inc", "tests/unit/pto_scoped_scalar_witnesses.inc")
+    paths = (
+        "src/isa/pto_scoped_scalar_uids.inc",
+        "tests/unit/pto_scoped_scalar_witnesses.inc",
+        "src/emulator/pto_scoped_scalar_runtime.inc",
+    )
     for name, expected in zip(paths, build(args.authority_root), strict=True):
         path = ROOT / name
         if args.check:

@@ -10,9 +10,28 @@
 
 #include "linx/model/emulator/minst_record.hpp"
 #include "linx/model/emulator/state.hpp"
+#include "linx/model/isa/codec.hpp"
 #include "linx/model/program_image.hpp"
 
 namespace linx::model::emulator {
+
+enum class ScopedMemoryAccessStatus : std::uint8_t {
+  Committed,
+  AlignmentFault,
+  AccessFault,
+};
+
+struct ScopedMemoryRequest {
+  isa::PtoScalarShareability shareability = isa::PtoScalarShareability::Private;
+  ScopedMemoryAccessStatus status = ScopedMemoryAccessStatus::AccessFault;
+  std::uint64_t source_pc = 0;
+  std::uint64_t wire_bits = 0;
+  std::uint64_t address = 0;
+  std::uint64_t value = 0;
+  std::uint8_t size = 0;
+  bool is_load = false;
+  bool is_store = false;
+};
 
 class ExecutionContext {
 public:
@@ -61,9 +80,13 @@ public:
   [[nodiscard]] const std::optional<MinstRecord> &LastCommitted() const noexcept {
     return last_committed_;
   }
+  [[nodiscard]] const std::vector<ScopedMemoryRequest> &ScopedMemoryRequests() const noexcept {
+    return scoped_memory_requests_;
+  }
 
   void SetTracePath(std::string path);
   void AppendRecord(const MinstRecord &record);
+  void RecordScopedMemoryRequest(const ScopedMemoryRequest &request);
   void RequestTerminate(int exit_code, std::string reason = {});
   void AdvanceCycle() noexcept {
     ++cycle_;
@@ -84,6 +107,7 @@ private:
   StatePtr state_{std::make_shared<LinxState>()};
   std::unordered_map<std::uint64_t, std::uint8_t> memory_{};
   std::vector<MinstRecord> committed_{};
+  std::vector<ScopedMemoryRequest> scoped_memory_requests_{};
   std::optional<MinstRecord> last_committed_;
   std::optional<std::ofstream> trace_stream_;
   std::optional<std::ofstream> trace_dump_stream_;

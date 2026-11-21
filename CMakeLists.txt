@@ -75,7 +75,7 @@ if(LINXISA_AUTHORITY_ROOT)
             "${CMAKE_CURRENT_SOURCE_DIR}/tools/isa/gen_pto_scoped_scalar.py"
             ${LINXISA_AUTHORITY_ARGS} --check
     WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
-    COMMENT "Checking locked PTO 0.59.1 scoped Scalar bindings and witnesses")
+    COMMENT "Checking locked PTO 0.59.1 scoped Scalar bindings, witnesses, and runtime forms")
 endif()
 
 target_include_directories(
@@ -166,6 +166,11 @@ add_test(
     ${Python3_EXECUTABLE}
     ${CMAKE_CURRENT_SOURCE_DIR}/tests/checks/test_gen_minst_codec.py -v)
 set_tests_properties(linx_model_check_gen_minst_codec PROPERTIES LABELS "checks")
+add_test(
+  NAME linx_model_check_gen_pto_scoped_runtime
+  COMMAND ${Python3_EXECUTABLE}
+          ${CMAKE_CURRENT_SOURCE_DIR}/tests/checks/test_gen_pto_scoped_runtime.py -v)
+set_tests_properties(linx_model_check_gen_pto_scoped_runtime PROPERTIES LABELS "checks")
 if(LINXISA_AUTHORITY_ROOT)
   set_tests_properties(
     linx_model_check_gen_minst_codec

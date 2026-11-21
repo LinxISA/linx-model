@@ -80,6 +80,22 @@ The reference executor rejects unhandled instructions before architectural
 state or retirement changes; it never treats missing handlers as successful
 no-ops.
 
+The PTO 0.59.1 scoped candidate is opt-in through
+`ReferenceExecutorOptions::enable_pto_scoped_scalar`. It executes the generated
+60-form immediate and PC-relative single-access set and keeps the default v0.58
+executor unchanged. The memory request log retains Private, IntraCore, or
+InterCore scope together with the full eight-byte carrier and outer TPC.
+Successful requests retire the complete carrier. Access or alignment failure
+does not publish a load destination, advance the PC, increment retirement, or
+append a committed instruction. The reference executor has one memory context,
+so the recorded scope is comparison evidence rather than a multi-agent
+coherence implementation.
+
+The CLI selects this path with `--enable-pto-v0591-scoped` for `ref`, `ca`,
+and `compare` engines. Raw images and ELF `PT_LOAD` images use the same fetch
+path. The current ELF loader does not interpret `.note.pto.isa`, so the release
+runner must verify the exact 0.59.1 note before enabling the candidate.
+
 Encoder behavior:
 
 - requires a valid form and the full canonical field set
