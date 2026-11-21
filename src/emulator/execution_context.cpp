@@ -44,6 +44,7 @@ void ExecutionContext::Reset() {
   state_->Reset();
   memory_.clear();
   committed_.clear();
+  scoped_memory_requests_.clear();
   last_committed_.reset();
   cycle_ = 0;
   exit_code_ = 0;
@@ -59,6 +60,7 @@ void ExecutionContext::LoadProgram(const ProgramImage &image) {
   has_program_ = true;
   memory_.clear();
   committed_.clear();
+  scoped_memory_requests_.clear();
   last_committed_.reset();
   state_->Reset();
   state_->pc = image.entry_point;
@@ -100,6 +102,10 @@ void ExecutionContext::AppendRecord(const MinstRecord &record) {
     *trace_dump_stream_ << '\n';
     trace_dump_stream_->flush();
   }
+}
+
+void ExecutionContext::RecordScopedMemoryRequest(const ScopedMemoryRequest &request) {
+  scoped_memory_requests_.push_back(request);
 }
 
 void ExecutionContext::RequestTerminate(int exit_code, std::string reason) {

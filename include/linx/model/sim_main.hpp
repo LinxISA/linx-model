@@ -36,6 +36,7 @@ struct SimMainArgs {
   bool enable_report = true;
   bool enable_disassembly = false;
   bool disassembly_only = false;
+  bool enable_pto_v0591_scoped = false;
 };
 
 namespace detail {

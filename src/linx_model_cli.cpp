@@ -16,6 +16,7 @@ using linx::model::emulator::DumpStateSummary;
 using linx::model::emulator::ExecutionContext;
 using linx::model::emulator::ExecutorBackedSim;
 using linx::model::emulator::ReferenceExecutor;
+using linx::model::emulator::ReferenceExecutorOptions;
 using linx::model::emulator::WriteMinstRecordDump;
 using linx::model::emulator::WriteMinstRecordJson;
 
@@ -49,7 +50,10 @@ int WriteResultDump(const SimMainArgs &args, const ExecutionContext &ctx, std::o
 
 int RunReferenceEngine(const SimMainArgs &args, std::ostream &out, std::ostream &err) {
   auto ctx = std::make_shared<ExecutionContext>();
-  auto executor = std::make_shared<ReferenceExecutor>(ctx);
+  const ReferenceExecutorOptions options{
+      .enable_pto_scoped_scalar = args.enable_pto_v0591_scoped,
+  };
+  auto executor = std::make_shared<ReferenceExecutor>(ctx, options);
   if (args.program_path.has_value()) {
     ctx->LoadProgram(LoadProgramImageFromFile(*args.program_path, args.raw_base_address));
   }
@@ -113,8 +117,11 @@ void WriteMismatchDump(const SimMainArgs &args,
 
 int RunCompareEngine(const SimMainArgs &args, std::ostream &, std::ostream &err) {
   auto ref_ctx = std::make_shared<ExecutionContext>();
-  auto ref_exec = std::make_shared<ReferenceExecutor>(ref_ctx);
-  auto ca_sim = std::make_shared<ExecutorBackedSim>();
+  const ReferenceExecutorOptions options{
+      .enable_pto_scoped_scalar = args.enable_pto_v0591_scoped,
+  };
+  auto ref_exec = std::make_shared<ReferenceExecutor>(ref_ctx, options);
+  auto ca_sim = std::make_shared<ExecutorBackedSim>(options);
 
   if (!args.program_path.has_value()) {
     err << "compare engine requires --bin\n";
@@ -177,7 +184,9 @@ int main(int argc, char **argv) {
     return RunCompareEngine(*parsed, std::cout, std::cerr);
   }
 
-  auto sim = std::make_shared<ExecutorBackedSim>();
+  auto sim = std::make_shared<ExecutorBackedSim>(ReferenceExecutorOptions{
+      .enable_pto_scoped_scalar = parsed->enable_pto_v0591_scoped,
+  });
   const int result = RunSimMain(*sim, *parsed);
   return result == 0 ? WriteResultDump(*parsed, sim->Context(), std::cerr) : result;
 }

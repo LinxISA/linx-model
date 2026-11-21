@@ -43,9 +43,22 @@ struct DecodeCandidate {
   Minst inst;
   int length_bits = 0;
   std::uint64_t bits = 0;
+  std::optional<PtoScalarShareability> shareability;
 };
 
 [[nodiscard]] std::optional<DecodeCandidate> DecodeBest(std::span<const std::uint8_t> bytes) {
+  if (bytes.size() >= PtoScopedScalar::CodeBytes) {
+    const auto word = PackLittleEndian(bytes, PtoScopedScalar::CodeBytes);
+    PtoScopedScalar scoped;
+    if (DecodePtoScopedScalar(word, scoped) == MinstCodecStatus::Ok) {
+      return DecodeCandidate{
+          .inst = std::move(scoped.inner),
+          .length_bits = 64,
+          .bits = word,
+          .shareability = scoped.shareability,
+      };
+    }
+  }
   std::optional<DecodeCandidate> best;
   int best_fixed_bits = std::numeric_limits<int>::min();
 
@@ -72,6 +85,24 @@ struct DecodeCandidate {
   }
 
   return best;
+}
+
+[[nodiscard]] std::string ScopedAssembly(const Minst &inst, PtoScalarShareability shareability) {
+  auto assembly = inst.Assemble();
+  const auto end = assembly.find_first_of(" \t");
+  const auto suffix = [&]() -> std::string_view {
+    switch (shareability) {
+    case PtoScalarShareability::Private:
+      return ".private";
+    case PtoScalarShareability::IntraCore:
+      return ".intra";
+    case PtoScalarShareability::InterCore:
+      return ".inter";
+    }
+    return {};
+  }();
+  assembly.insert(end == std::string::npos ? assembly.size() : end, suffix);
+  return assembly;
 }
 
 } // namespace
@@ -120,7 +151,9 @@ std::optional<MinstDisassemblyLine> DecodeDisassemblyLine(std::span<const std::u
       .size_bytes = size_bytes,
       .status = decoded->inst.decode_status,
       .bytes_hex = HexBytes(bytes.first(size_bytes)),
-      .text = decoded->inst.Assemble(),
+      .text = decoded->shareability.has_value()
+                  ? ScopedAssembly(decoded->inst, *decoded->shareability)
+                  : decoded->inst.Assemble(),
       .form_id =
           decoded->inst.form_id.empty() ? std::string("-") : std::string(decoded->inst.form_id),
   };

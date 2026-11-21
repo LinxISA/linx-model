@@ -26,6 +26,8 @@ void PrintUsage(std::ostream &os, const char *program) {
      << "                      Export architecture-visible result memory\n"
      << "  --disasm            Print program disassembly before simulation\n"
      << "  --disasm-only       Print program disassembly and exit\n"
+     << "  --enable-pto-v0591-scoped\n"
+     << "                      Enable the bounded PTO 0.59.1 scoped reference path\n"
      << "  --compare-window <n> Buffered compare window size (default 128)\n"
      << "  --stop-pc <pc>      Stop/reference PC in hex or decimal\n"
      << "  --max-cycles <n>    Terminate after n cycles\n"
@@ -114,6 +116,11 @@ std::optional<SimMainArgs> ParseSimMainArgs(int argc, char **argv, std::ostream 
     if (Matches(arg, "--disasm-only")) {
       args.enable_disassembly = true;
       args.disassembly_only = true;
+      continue;
+    }
+
+    if (Matches(arg, "--enable-pto-v0591-scoped")) {
+      args.enable_pto_v0591_scoped = true;
       continue;
     }
 

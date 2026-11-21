@@ -17,6 +17,8 @@ using linx::model::emulator::ExecutionContext;
 using linx::model::emulator::kLinxSharedTileMaxBytes;
 using linx::model::emulator::MakeMinstRecord;
 using linx::model::emulator::ReferenceExecutor;
+using linx::model::emulator::ReferenceExecutorOptions;
+using linx::model::emulator::ScopedMemoryAccessStatus;
 using linx::model::emulator::SharedTileBank;
 using linx::model::emulator::SharedTileDescriptor;
 using linx::model::emulator::SharedTileWriteStatus;
@@ -56,6 +58,14 @@ std::vector<std::uint8_t> EncodedBytes(const Minst &inst) {
   bytes.reserve(byte_count);
   for (std::uint8_t idx = 0; idx < byte_count; ++idx) {
     bytes.push_back(static_cast<std::uint8_t>((encoded.bits >> (idx * 8U)) & 0xffU));
+  }
+  return bytes;
+}
+
+std::vector<std::uint8_t> ScopedBytes(std::uint64_t word) {
+  std::vector<std::uint8_t> bytes(8);
+  for (std::size_t idx = 0; idx < bytes.size(); ++idx) {
+    bytes[idx] = static_cast<std::uint8_t>(word >> (idx * 8U));
   }
   return bytes;
 }
@@ -396,6 +406,43 @@ int TestReferenceExecutorImmediateContracts() {
   return 0;
 }
 
+int TestReferenceExecutorSdiContract() {
+  const auto *form = linx::model::isa::LookupFormByMnemonic("SDI");
+  if (form == nullptr) {
+    return 63;
+  }
+  Minst inst;
+  inst.SetForm(form);
+  for (const auto &field : FieldsFor(*form)) {
+    std::int64_t value = 0;
+    if (field.name == "SrcL") {
+      value = 3;
+    } else if (field.name == "SrcR") {
+      value = 4;
+    } else if (field.name == "simm12") {
+      value = 1;
+    }
+    inst.SetDecodedField(field.name, value, field.signed_hint > 0, field.bit_width);
+  }
+  inst.RebuildTypedViews();
+  const auto bytes = EncodedBytes(inst);
+  if (bytes.size() != 4) {
+    return 64;
+  }
+  auto ctx = std::make_shared<ExecutionContext>();
+  ctx->LoadProgram(LoadRawBinaryImageFromBytes(bytes, "sdi-contract", 0));
+  ctx->State().gpr[3] = 0x1122334455667788ULL;
+  ctx->State().gpr[4] = 0x2000;
+  ReferenceExecutor executor(ctx);
+  if (!executor.Step() || ctx->Terminated() || ctx->Read64(0x2008) != 0x1122334455667788ULL ||
+      !ctx->LastCommitted().has_value() || ctx->LastCommitted()->memory.addr != 0x2008 ||
+      ctx->LastCommitted()->memory.size != 8 ||
+      ctx->LastCommitted()->memory.wdata != 0x1122334455667788ULL) {
+    return 65;
+  }
+  return 0;
+}
+
 int TestReferenceExecutorMovrContracts() {
   const auto make_movr = [](std::uint64_t src, std::uint64_t dst) {
     auto inst = BuildZeroInst("80d2b5f3580b");
@@ -458,6 +505,165 @@ int TestReferenceExecutorMovrContracts() {
     }
   }
 
+  return 0;
+}
+
+int TestScopedReferenceExecutor() {
+  constexpr ReferenceExecutorOptions kScoped{.enable_pto_scoped_scalar = true};
+  {
+    auto ctx = std::make_shared<ExecutionContext>();
+    ctx->LoadProgram(
+        LoadRawBinaryImageFromBytes(ScopedBytes(0x0000FFF22299051FULL), "scoped-disabled", 0));
+    ReferenceExecutor executor(ctx);
+    if (executor.Step() || !ctx->Terminated() || ctx->LastError() != "fetch_decode_failed" ||
+        !ctx->ScopedMemoryRequests().empty() || ctx->State().pc != 0 ||
+        ctx->State().insn_count != 0 || ctx->LastCommitted().has_value()) {
+      return 50;
+    }
+  }
+
+  {
+    auto ctx = std::make_shared<ExecutionContext>();
+    ctx->LoadProgram(
+        LoadRawBinaryImageFromBytes(ScopedBytes(0x0000FFF22299051FULL), "scoped-lwi", 0));
+    ctx->State().gpr[4] = 0x1004;
+    ctx->State().gpr[5] = 0xaaaaaaaaaaaaaaaaULL;
+    ctx->Write32(0x1000, 0x80000001U);
+    ReferenceExecutor executor(ctx, kScoped);
+    if (!executor.Step() || ctx->Terminated() || ctx->State().pc != 8 ||
+        ctx->State().insn_pc_next != 8 || ctx->State().insn_count != 1 ||
+        ctx->State().gpr[5] != 0xffffffff80000001ULL || ctx->Committed().size() != 1 ||
+        ctx->ScopedMemoryRequests().size() != 1) {
+      return 51;
+    }
+    const auto &request = ctx->ScopedMemoryRequests().front();
+    if (request.shareability != linx::model::isa::PtoScalarShareability::IntraCore ||
+        request.status != ScopedMemoryAccessStatus::Committed || request.source_pc != 0 ||
+        request.wire_bits != 0x0000FFF22299051FULL || request.address != 0x1000 ||
+        request.value != 0x80000001U || request.size != 4 || !request.is_load || request.is_store ||
+        ctx->LastCommitted()->next_pc != 8 || ctx->LastCommitted()->memory.addr != 0x1000 ||
+        ctx->LastCommitted()->memory.size != 4) {
+      return 52;
+    }
+  }
+
+  {
+    auto ctx = std::make_shared<ExecutionContext>();
+    ctx->LoadProgram(
+        LoadRawBinaryImageFromBytes(ScopedBytes(0x000442B9000E0A1FULL), "scoped-pcr-load", 0x1002));
+    ctx->State().gpr[5] = 0xbbbbbbbbbbbbbbbbULL;
+    ctx->Write8(0x1020, 0xfe);
+    ReferenceExecutor executor(ctx, kScoped);
+    if (!executor.Step() || ctx->Terminated() || ctx->State().pc != 0x100a ||
+        ctx->State().gpr[5] != 0xfe || ctx->ScopedMemoryRequests().size() != 1) {
+      return 53;
+    }
+    const auto &request = ctx->ScopedMemoryRequests().front();
+    if (request.shareability != linx::model::isa::PtoScalarShareability::InterCore ||
+        request.address != 0x1020 || request.source_pc != 0x1002 || request.size != 1 ||
+        request.value != 0xfe || request.status != ScopedMemoryAccessStatus::Committed) {
+      return 54;
+    }
+  }
+
+  {
+    auto ctx = std::make_shared<ExecutionContext>();
+    ctx->LoadProgram(
+        LoadRawBinaryImageFromBytes(ScopedBytes(0x00000241A059041FULL), "scoped-swi", 0));
+    ctx->State().gpr[3] = 0x1122334455667788ULL;
+    ctx->State().gpr[4] = 0x2000;
+    ReferenceExecutor executor(ctx, kScoped);
+    if (!executor.Step() || ctx->Terminated() || ctx->Read32(0x2004) != 0x55667788U ||
+        ctx->State().pc != 8 || ctx->ScopedMemoryRequests().size() != 1) {
+      return 55;
+    }
+    const auto &request = ctx->ScopedMemoryRequests().front();
+    if (request.shareability != linx::model::isa::PtoScalarShareability::Private ||
+        request.address != 0x2004 || request.value != 0x55667788U || request.size != 4 ||
+        request.is_load || !request.is_store ||
+        request.status != ScopedMemoryAccessStatus::Committed) {
+      return 56;
+    }
+  }
+
+  {
+    auto ctx = std::make_shared<ExecutionContext>();
+    ctx->LoadProgram(LoadRawBinaryImageFromBytes(ScopedBytes(0xFFC18FE9FFFE091FULL),
+                                                 "scoped-pcr-store", 0x3002));
+    ctx->State().gpr[3] = 0x123456789abcdef0ULL;
+    ReferenceExecutor executor(ctx, kScoped);
+    if (!executor.Step() || ctx->Terminated() || ctx->Read8(0x2ff0) != 0xf0 ||
+        ctx->State().pc != 0x300a || ctx->ScopedMemoryRequests().size() != 1) {
+      return 57;
+    }
+    const auto &request = ctx->ScopedMemoryRequests().front();
+    if (request.shareability != linx::model::isa::PtoScalarShareability::IntraCore ||
+        request.address != 0x2ff0 || request.value != 0xf0 || request.size != 1 ||
+        request.status != ScopedMemoryAccessStatus::Committed) {
+      return 58;
+    }
+  }
+
+  {
+    auto ctx = std::make_shared<ExecutionContext>();
+    ctx->LoadProgram(
+        LoadRawBinaryImageFromBytes(ScopedBytes(0x000000023299061FULL), "scoped-load-fault", 0));
+    ctx->State().gpr[4] = 0x4000;
+    ctx->State().gpr[5] = 0xccccccccccccccccULL;
+    ReferenceExecutor executor(ctx, kScoped);
+    if (executor.Step() || !ctx->Terminated() || ctx->LastError() != "scoped_memory_access_fault" ||
+        ctx->State().pc != 0 || ctx->State().insn_count != 0 ||
+        ctx->State().gpr[5] != 0xccccccccccccccccULL || ctx->LastCommitted().has_value() ||
+        ctx->ScopedMemoryRequests().size() != 1 ||
+        ctx->ScopedMemoryRequests().front().status != ScopedMemoryAccessStatus::AccessFault) {
+      return 59;
+    }
+  }
+
+  {
+    auto ctx = std::make_shared<ExecutionContext>();
+    ctx->LoadProgram(LoadRawBinaryImageFromBytes(ScopedBytes(0x000000021299041FULL),
+                                                 "scoped-alignment-fault", 0));
+    ctx->State().gpr[4] = 0x4001;
+    ctx->State().gpr[5] = 0xddddddddddddddddULL;
+    ReferenceExecutor executor(ctx, kScoped);
+    if (executor.Step() || !ctx->Terminated() ||
+        ctx->LastError() != "scoped_memory_alignment_fault" || ctx->State().pc != 0 ||
+        ctx->State().insn_count != 0 || ctx->State().gpr[5] != 0xddddddddddddddddULL ||
+        ctx->LastCommitted().has_value() || ctx->ScopedMemoryRequests().size() != 1 ||
+        ctx->ScopedMemoryRequests().front().status != ScopedMemoryAccessStatus::AlignmentFault) {
+      return 60;
+    }
+  }
+
+  {
+    auto bytes = ScopedBytes(0x0000FFF22299051FULL);
+    bytes.pop_back();
+    auto ctx = std::make_shared<ExecutionContext>();
+    ctx->LoadProgram(LoadRawBinaryImageFromBytes(bytes, "scoped-truncated", 0));
+    ReferenceExecutor executor(ctx, kScoped);
+    if (executor.Step() || !ctx->Terminated() || ctx->LastError() != "fetch_decode_failed" ||
+        ctx->State().pc != 0 || ctx->State().insn_count != 0 ||
+        !ctx->ScopedMemoryRequests().empty() || ctx->LastCommitted().has_value()) {
+      return 61;
+    }
+  }
+
+  {
+    auto ctx = std::make_shared<ExecutionContext>();
+    ctx->LoadProgram(LoadRawBinaryImageFromBytes(ScopedBytes(0x00000241A059041FULL),
+                                                 "scoped-store-alignment-fault", 0));
+    ctx->State().gpr[3] = 0x1122334455667788ULL;
+    ctx->State().gpr[4] = 0x1ffd;
+    ReferenceExecutor executor(ctx, kScoped);
+    if (executor.Step() || !ctx->Terminated() ||
+        ctx->LastError() != "scoped_memory_alignment_fault" || ctx->State().pc != 0 ||
+        ctx->State().insn_count != 0 || ctx->Read32(0x2001).has_value() ||
+        ctx->LastCommitted().has_value() || ctx->ScopedMemoryRequests().size() != 1 ||
+        ctx->ScopedMemoryRequests().front().status != ScopedMemoryAccessStatus::AlignmentFault) {
+      return 62;
+    }
+  }
   return 0;
 }
 
@@ -574,7 +780,13 @@ int main() {
   if (const int rc = TestReferenceExecutorImmediateContracts(); rc != 0) {
     return rc;
   }
+  if (const int rc = TestReferenceExecutorSdiContract(); rc != 0) {
+    return rc;
+  }
   if (const int rc = TestReferenceExecutorMovrContracts(); rc != 0) {
+    return rc;
+  }
+  if (const int rc = TestScopedReferenceExecutor(); rc != 0) {
     return rc;
   }
   if (const int rc = TestFinisherContract(); rc != 0) {

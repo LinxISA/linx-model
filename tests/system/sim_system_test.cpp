@@ -209,12 +209,13 @@ int RunResultDumpArgParseSmoke() {
       "0x20000",
       "--result-size",
       "12",
+      "--enable-pto-v0591-scoped",
   };
   const auto parsed = linx::model::detail::ParseSimMainArgs(
       static_cast<int>(std::size(argv)), const_cast<char **>(argv), out, err, exit_code);
   if (!parsed.has_value() || exit_code != 0 || !err.str().empty() ||
       parsed->result_dump_path != "/tmp/result.bin" || parsed->result_address != 0x20000 ||
-      parsed->result_size != 12) {
+      parsed->result_size != 12 || !parsed->enable_pto_v0591_scoped) {
     return 10;
   }
   return 0;

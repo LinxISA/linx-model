@@ -22,7 +22,7 @@ def read_locked(path: Path, expected: str) -> dict:
     return json.loads(data)
 
 
-def build(authority: Path) -> tuple[str, str]:
+def build(authority: Path) -> tuple[str, str, str]:
     base = read_locked(authority / "isa/v0.58/linxisa-v0.58.json", EXPECTED_CATALOG_CONTENT_SHA256)
     source = read_locked(authority / "isa/v0.59/state/pto_scalar_forms.json", SCOPED_SOURCE_SHA256)
     forms = {
@@ -51,7 +51,38 @@ def build(authority: Path) -> tuple[str, str]:
             f'    {{0x{word:016x}ULL, "{trace_uid_for(inner)}", {row["scope_code"]}, {inner["length_bits"]}}},'
         )
     tests.append("};")
-    return "\n".join(table) + "\n", "\n".join(tests) + "\n"
+    eligible = []
+    scalar_forms = {row["form_id"]: row for row in source["forms"]}
+    for identity in sorted({row["base_form_id"] for row in variants}):
+        row = scalar_forms[identity]
+        agu = row.get("agu", {})
+        if (
+            agu.get("action") not in {"Load", "Store"}
+            or agu.get("address_kind") not in {"Immediate", "PCRelative"}
+            or agu.get("update_mode") != "None"
+        ):
+            continue
+        inner = forms[identity]
+        eligible.append(
+            (
+                trace_uid_for(inner),
+                agu["action"] == "Load",
+                agu["address_kind"] == "PCRelative",
+                agu["offset_scale"],
+                agu["size_bytes"],
+                agu["signed_load"],
+            )
+        )
+    if len(eligible) != 60:
+        raise ValueError(f"expected 60 scoped immediate/PCR single-access forms, found {len(eligible)}")
+    runtime = [prefix, "constexpr ScopedSingleAccessForm kScopedSingleAccessForms[] = {"]
+    runtime.extend(
+        f'    {{"{uid}", {str(load).lower()}, {str(pcr).lower()}, {scale}, {size}, '
+        f'{str(signed).lower()}}},'
+        for uid, load, pcr, scale, size, signed in sorted(eligible)
+    )
+    runtime.append("};")
+    return "\n".join(table) + "\n", "\n".join(tests) + "\n", "\n".join(runtime) + "\n"
 
 
 def main() -> int:
@@ -59,7 +90,11 @@ def main() -> int:
     parser.add_argument("--authority-root", type=Path, required=True)
     parser.add_argument("--check", action="store_true")
     args = parser.parse_args()
-    paths = ("src/isa/pto_scoped_scalar_uids.inc", "tests/unit/pto_scoped_scalar_witnesses.inc")
+    paths = (
+        "src/isa/pto_scoped_scalar_uids.inc",
+        "tests/unit/pto_scoped_scalar_witnesses.inc",
+        "src/emulator/pto_scoped_scalar_runtime.inc",
+    )
     for name, expected in zip(paths, build(args.authority_root), strict=True):
         path = ROOT / name
         if args.check:

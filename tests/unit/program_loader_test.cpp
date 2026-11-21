@@ -45,6 +45,14 @@ std::vector<std::uint8_t> EncodeAddBytes() {
   return bytes;
 }
 
+std::vector<std::uint8_t> ScopedBytes(std::uint64_t word) {
+  std::vector<std::uint8_t> bytes(8);
+  for (std::size_t idx = 0; idx < bytes.size(); ++idx) {
+    bytes[idx] = static_cast<std::uint8_t>(word >> (idx * 8U));
+  }
+  return bytes;
+}
+
 void WriteFile(const fs::path &path, const std::vector<std::uint8_t> &bytes) {
   std::ofstream out(path, std::ios::binary);
   out.write(reinterpret_cast<const char *>(bytes.data()),
@@ -171,6 +179,32 @@ int RunElfFileSmoke() {
   return 0;
 }
 
+int RunScopedElfSmoke() {
+  const auto elf = BuildElf64Image(ScopedBytes(0x000442B9000E0A1FULL), 0x1002);
+  const auto tmp_path = fs::temp_directory_path() / "linx_model_scoped_program_loader_test.elf";
+  WriteFile(tmp_path, elf);
+  const auto cleanup = [&]() {
+    std::error_code ec;
+    fs::remove(tmp_path, ec);
+  };
+  try {
+    const auto image = LoadProgramImageFromFile(tmp_path.string());
+    const auto lines = DisassembleProgram(image);
+    if (image.entry_point != 0x1002 || lines.size() != 1 || lines.front().pc != 0x1002 ||
+        lines.front().length_bits != 64 || lines.front().size_bytes != 8 ||
+        lines.front().bits != 0x000442B9000E0A1FULL ||
+        lines.front().text.find("hl.lbu.pcr.inter") == std::string::npos) {
+      cleanup();
+      return 20;
+    }
+  } catch (...) {
+    cleanup();
+    return 21;
+  }
+  cleanup();
+  return 0;
+}
+
 } // namespace
 
 int main() {
@@ -179,6 +213,9 @@ int main() {
   }
   if (RunElfFileSmoke() != 0) {
     return 2;
+  }
+  if (RunScopedElfSmoke() != 0) {
+    return 3;
   }
   return 0;
 }
