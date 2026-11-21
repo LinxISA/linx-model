@@ -30,6 +30,40 @@ using linx::model::isa::MinstOpcodeClass;
 using linx::model::isa::MinstPtr;
 using linx::model::isa::MinstStage;
 
+struct ScopedWitness {
+  std::uint64_t wire;
+  std::string_view inner_uid;
+  std::uint8_t scope;
+  std::uint8_t bits;
+};
+
+#include "pto_scoped_scalar_witnesses.inc"
+
+int RunPtoScopedScalarSmoke() {
+  using linx::model::isa::DecodePtoScopedScalar;
+  using linx::model::isa::PtoScopedScalar;
+  static_assert(std::size(kScopedWitnesses) == 705);
+  PtoScopedScalar decoded;
+  for (const auto &witness : kScopedWitnesses) {
+    if (DecodePtoScopedScalar(witness.wire, decoded) != MinstCodecStatus::Ok ||
+        decoded.wire_bits != witness.wire || decoded.inner.form_id != witness.inner_uid ||
+        decoded.inner.length_bits != witness.bits ||
+        static_cast<std::uint8_t>(decoded.shareability) != witness.scope) {
+      std::cerr << "Scoped witness mismatch for " << witness.inner_uid << '\n';
+      return 1;
+    }
+  }
+  for (const auto rejected :
+       {0x00000000001a101fULL, 0x00000000001a031fULL, 0x00000000001a0c1fULL, 0x00000001001a001fULL,
+        0x00000000700b041fULL, 0x06000009003e081fULL}) {
+    if (DecodePtoScopedScalar(rejected, decoded) == MinstCodecStatus::Ok ||
+        decoded.inner.valid_form) {
+      return 2;
+    }
+  }
+  return 0;
+}
+
 bool Evaluate(MinstConstraintOp op, std::int64_t lhs, std::int64_t rhs) {
   switch (op) {
   case MinstConstraintOp::Eq:
@@ -478,6 +512,10 @@ int RunAsmTemplateReplacementSmoke() {
 } // namespace
 
 int main() {
+  if (const int scoped = RunPtoScopedScalarSmoke(); scoped != 0) {
+    std::cerr << "RunPtoScopedScalarSmoke failed with code " << scoped << '\n';
+    return 9;
+  }
   const auto representative = RunRepresentativeRoundTripSmoke();
   if (representative != 0) {
     std::cerr << "RunRepresentativeRoundTripSmoke failed with code " << representative << '\n';

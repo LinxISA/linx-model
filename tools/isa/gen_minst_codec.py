@@ -117,6 +117,13 @@ def build_reg_aliases(spec: dict) -> tuple[dict[str, int], list[str]]:
     return alias_to_code, code_to_asm
 
 
+def trace_uid_for(inst: dict) -> str:
+    source_uid = str(inst.get("pto_source_form_id", "")).rsplit("_", 1)[-1]
+    if len(source_uid) == 12 and all(character in "0123456789abcdef" for character in source_uid):
+        return source_uid
+    return str(inst.get("uid", ""))
+
+
 def build_forms(spec: dict) -> tuple[list[dict], list[dict], list[dict], list[dict]]:
     alias_to_code, _ = build_reg_aliases(spec)
     forms = []
@@ -125,14 +132,7 @@ def build_forms(spec: dict) -> tuple[list[dict], list[dict], list[dict], list[di
     constraints = []
 
     for inst in spec.get("instructions", []):
-        source_form_id = str(inst.get("pto_source_form_id", ""))
-        source_uid = source_form_id.rsplit("_", 1)[-1]
-        trace_uid = (
-            source_uid
-            if len(source_uid) == 12
-            and all(character in "0123456789abcdef" for character in source_uid)
-            else str(inst.get("uid", ""))
-        )
+        trace_uid = trace_uid_for(inst)
         encoding = inst.get("encoding") or {}
         parts = list(encoding.get("parts") or [])
         offsets = []
